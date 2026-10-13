@@ -6,10 +6,11 @@
  *   npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密码 secret 登录" --url "https://example.com/login"
  */
 
+import fs from "fs"
 import dotenv from "dotenv"
 import { chromium } from "playwright"
 import { describeSelection } from "./config/selection.js"
-import { askHidden, askVisible, ensureUserEnv } from "./config/user-env.js"
+import { askHidden, askVisible, ensureUserEnv, normalizeMaxSteps, parseEnvFile } from "./config/user-env.js"
 import { extractGoalContext, goalNeedsCredentials, redactSecrets } from "./core/goal-context.js"
 import { runAiUiTest } from "./core/runner.js"
 import { createAutoLLMProvider } from "./llm/provider.js"
@@ -22,7 +23,7 @@ function readArg(args: string[], name: string): string | undefined {
 }
 
 function readCommand(args: string[]): string | undefined {
-  const valued = new Set(["--goal", "--url", "--report-dir", "--screenshot-dir", "--plan", "--mode"])
+  const valued = new Set(["--goal", "--url", "--report-dir", "--screenshot-dir", "--plan", "--mode", "--report-lang", "--max-steps"])
   for (let index = 0; index < args.length; index += 1) {
     if (valued.has(args[index])) {
       index += 1
@@ -49,6 +50,8 @@ function printHelp(): void {
   --headed         显示浏览器
   --report-dir     报告目录
   --screenshot-dir 截图目录
+  --report-lang    本次运行的报告语言，默认简体中文。例如 zh-CN、zh-TW、en
+  --max-steps      本次运行的步数上限，覆盖 config 和项目 .env
   config           选择模型并保存对应的 key，之后可重复调整
   --configure      同 config，调整后继续执行本次目标
   --no-prompt      不询问，适合 CI
@@ -101,13 +104,20 @@ async function main() {
   const configuring = command === "config" || command === "configure" || args.includes("--configure")
   const interactive = !args.includes("--no-prompt") && Boolean(process.stdin.isTTY && process.stdout.isTTY)
   if (configuring && !interactive) throw new Error("config 需要在交互终端中运行")
-  await ensureUserEnv({
+  const envState = await ensureUserEnv({
     force: configuring,
     interactive,
   })
+  const reportLang = readArg(args, "--report-lang")
+  if (reportLang) process.env.AUTOTESTLOOP_REPORT_LANG = reportLang.trim()
+  const saved = fs.existsSync(envState.path) ? parseEnvFile(fs.readFileSync(envState.path, "utf8")) : {}
+  const cliMaxSteps = readArg(args, "--max-steps")
+  if (cliMaxSteps) process.env.AUTO_MAX_STEPS = normalizeMaxSteps(cliMaxSteps)
+  else if (saved.AUTO_MAX_STEPS) process.env.AUTO_MAX_STEPS = normalizeMaxSteps(saved.AUTO_MAX_STEPS)
   if (command === "config" || command === "configure") {
     console.log("配置已保存")
     console.log(describeSelection())
+    console.log("步数上限: " + (process.env.AUTO_MAX_STEPS || "12"))
     return
   }
 
@@ -142,7 +152,7 @@ async function main() {
         description: goalText,
         targetUrl: url!,
         initialContext: context,
-        maxSteps: Number(process.env.AUTO_MAX_STEPS || "12"),
+        maxSteps: Number(normalizeMaxSteps(process.env.AUTO_MAX_STEPS)),
       }
 
   console.log("AutoTestLoop")

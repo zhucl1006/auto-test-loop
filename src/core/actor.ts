@@ -12,6 +12,7 @@
  *    }
  */
 
+import { withReportLanguage } from "../config/report-language.js"
 import { chooseElementWithJev, jevDecisionEnabled } from "../llm/jev-decider.js";
 import { ActionDecision, ElementSnapshot, LLMProvider, PlannedStep } from "../types/index.js";
 
@@ -496,7 +497,7 @@ Return ONLY a JSON object:
 Available Page Elements:
 ${formattedElements}`;
 
-    const res = await this.llmProvider!.generateJson<any>(userPrompt, { systemPrompt });
+    const res = await this.llmProvider!.generateJson<any>(userPrompt, { systemPrompt: withReportLanguage(systemPrompt) });
     const chosenEl = elements.find((e) => e.targetId === res.targetId);
 
     return {

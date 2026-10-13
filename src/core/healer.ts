@@ -8,6 +8,7 @@
  * 4. 给出修复建议并生成自愈指令 (healingAction)
  */
 
+import { withReportLanguage } from "../config/report-language.js";
 import { FailureContext, FailureDiagnosis, LLMProvider } from "../types/index.js";
 
 export class LlmHealer {
@@ -53,6 +54,7 @@ Return ONLY a JSON object:
     "reasoning": "how this action heals the state"
   }
 }`;
+    const systemPromptWithLanguage = withReportLanguage(systemPrompt);
 
     const userPrompt = `Failure Context:
 - Current URL: ${context.currentUrl}
@@ -61,7 +63,7 @@ Return ONLY a JSON object:
 - Browser Console Errors: ${JSON.stringify(context.consoleErrors)}
 - Screenshot Path: ${context.screenshotPath || "None"}`;
 
-    const res = await this.llmProvider!.generateJson<any>(userPrompt, { systemPrompt });
+    const res = await this.llmProvider!.generateJson<any>(userPrompt, { systemPrompt: systemPromptWithLanguage });
 
     return {
       category: res.category || "UNKNOWN",

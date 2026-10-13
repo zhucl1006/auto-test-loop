@@ -48,6 +48,8 @@ export interface ExecutionPlan {
   summary: string;
   steps: PlannedStep[];
   assertions: ExpectedAssertion[];
+  /** 自主循环中，规划器判断测试目标已经完成。 */
+  complete?: boolean;
   rawPlanText?: string;
 }
 

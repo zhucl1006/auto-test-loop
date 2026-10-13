@@ -10,8 +10,13 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import { resolveReportLanguage } from "../config/report-language.js";
 import { redactSecrets } from "../core/goal-context.js";
 import { AiUiTestReport, StepExecutionResult } from "../types/index.js";
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
 
 function displayInput(step: StepExecutionResult, secrets: Array<string | undefined>): string {
   const target = (step.plannedStep?.semanticTarget || "") + " " + (step.plannedStep?.description || "");
@@ -154,6 +159,7 @@ export class HtmlReporter {
           <div>目标地址: <code>${report.goal.targetUrl}</code></div>
           <div>总耗时: <strong>${report.durationMs}ms</strong></div>
           <div>开始时间: ${report.startTime}</div>
+          <div>报告语言: <strong>${escapeHtml(resolveReportLanguage().label)}</strong></div>
         </div>
       </div>
       <div>

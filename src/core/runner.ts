@@ -5,7 +5,7 @@
  * [01. LLM Planner] -> 循环([02. Jev Actor] -> [03. Playwright Executor]) -> [04. Assertion Verifier] -> [05. LLM Healer 自愈分析]
  */
 
-import { LlmPlanner } from "./planner.js";
+import { LlmPlanner, PlanHistoryItem } from "./planner.js";
 import { PageObserver } from "./observer.js";
 import { JevActor } from "./actor.js";
 import { PlaywrightExecutor, PlaywrightPage } from "./executor.js";
@@ -68,6 +68,9 @@ export class AiUiAutomationRunner {
 
     this.log(`🎯 开始执行测试用例: ${goal.name} (${goal.id})`);
     this.log(`📋 测试目标描述: ${goal.description}`);
+    if (this.options.autonomous && !goal.plannedSteps?.length) {
+      return this.runAutonomous(goal, page, startTime, startTimestamp);
+    }
 
     // ==========================================
     // 01. LLM: 理解测试目标与规划
@@ -257,6 +260,201 @@ export class AiUiAutomationRunner {
 
     return finalReport;
   }
+  /**
+   * 自主模式：每进入一个新页面就验收，再让规划器生成下一批步骤，直到目标完成或步数用尽。
+   * 显式计划不走这里。
+   */
+  private async runAutonomous(
+    goal: TestGoal,
+    page: PlaywrightPage,
+    startTime: string,
+    startTimestamp: number,
+  ): Promise<AiUiTestReport> {
+    const maxSteps = goal.maxSteps && goal.maxSteps > 0 ? goal.maxSteps : 12;
+    this.log("自主模式：页面变化后重新规划，直到目标完成或达到 " + maxSteps + " 步");
+    await page.goto(goal.targetUrl, { waitUntil: "domcontentloaded", timeout: 20000 });
+    if (page.waitForLoadState) {
+      await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => undefined);
+    }
+
+    const executor = new PlaywrightExecutor(page);
+    const stepResults: StepExecutionResult[] = [];
+    const screenshots: string[] = [];
+    const assertionResults: AiUiTestReport["assertionResults"] = [];
+    const plannedSteps: AiUiTestReport["plan"]["steps"] = [];
+    const plannedAssertions: AiUiTestReport["plan"]["assertions"] = [];
+    const summaries: string[] = [];
+    const rawPlans: string[] = [];
+    let stepIndex = 1;
+    let executed = 0;
+    let halted = false;
+    let complete = false;
+    let failedStepResult: StepExecutionResult | undefined;
+    let previousSignature = "";
+    let rounds = 0;
+
+    while (executed < maxSteps && !halted && !complete && rounds < maxSteps) {
+      const elements = await this.observer.captureInteractiveElements(page);
+      const history = toHistory(stepResults);
+      this.log("👉 [01/05] 规划下一批步骤。当前页面: " + page.url() + "，已执行 " + executed + " 步");
+      const plan = await this.planner.plan(goal, { url: page.url(), elements }, {
+        scope: "next-page",
+        history,
+      });
+      rounds += 1;
+      if (plan.summary) summaries.push(plan.summary);
+      if (plan.rawPlanText) rawPlans.push(plan.rawPlanText);
+      this.log("   本批 " + plan.steps.length + " 步，" + plan.assertions.length + " 条断言" + (plan.complete ? "，规划器判断目标已完成" : ""));
+
+      if (plan.complete || plan.steps.length === 0) {
+        complete = Boolean(plan.complete);
+        if (plan.assertions.length) {
+          const checked = await this.verifier.verifyAll(page, plan.assertions, elements);
+          assertionResults.push(...checked.results);
+          plannedAssertions.push(...plan.assertions);
+          if (!checked.allPassed) halted = true;
+        }
+        if (!complete) this.log("规划器没有给出可执行的下一步，停止循环");
+        break;
+      }
+
+      const signature = pageKey(page.url()) + "|" + plan.steps.map((step) => step.intent + ":" + step.semanticTarget).join(",");
+      if (signature === previousSignature) {
+        this.log("规划没有推进，停止继续");
+        break;
+      }
+      previousSignature = signature;
+
+      const pageAtStart = pageKey(page.url());
+      let enteredNewPage = false;
+      for (const step of plan.steps.slice(0, Math.min(4, maxSteps - executed))) {
+        plannedSteps.push(step);
+        this.log("👉 [02/05 & 03/05] 步骤 " + stepIndex + ": " + step.description + " (意图: " + step.intent + " -> " + step.semanticTarget + ")");
+        const visible = await this.observer.captureInteractiveElements(page);
+        const decision = await this.actor.decideNextAction(step, visible);
+        if (decision.confidence < 0.4 && step.optional) {
+          this.log("   ⏭️ 可选步骤「" + step.description + "」跳过");
+          stepResults.push({
+            stepIndex,
+            plannedStep: step,
+            action: decision,
+            status: "SKIPPED",
+            durationMs: 0,
+            urlBefore: page.url(),
+            urlAfter: page.url(),
+          });
+          stepIndex += 1;
+          continue;
+        }
+        this.log("   Jev 决策: " + decision.action.toUpperCase() + " -> " + decision.reasoning);
+        const execResult = await executor.executeAction(stepIndex, decision, {
+          screenshotDir: this.options.screenshotDir,
+          elements: visible,
+          ...({ goalId: goal.id } as Record<string, string>),
+        });
+        execResult.plannedStep = step;
+        stepResults.push(execResult);
+        if (execResult.screenshotPath) screenshots.push(execResult.screenshotPath);
+        executed += 1;
+        stepIndex += 1;
+        if (execResult.status === "FAILED" && !step.optional) {
+          this.log("   ❌ 步骤执行失败: " + execResult.error);
+          halted = true;
+          failedStepResult = execResult;
+          break;
+        }
+        this.log("   ✅ 步骤执行成功 (" + execResult.durationMs + "ms)");
+        if (pageKey(execResult.urlAfter) !== pageAtStart) {
+          enteredNewPage = true;
+          break;
+        }
+      }
+      if (halted) break;
+
+      if (enteredNewPage) {
+        this.log("👉 [04/05] 已进入新页面，先验收再继续规划: " + page.url());
+        const visibleAfter = await this.observer.captureInteractiveElements(page);
+        if (plan.assertions.length) {
+          const checked = await this.verifier.verifyAll(page, plan.assertions, visibleAfter);
+          assertionResults.push(...checked.results);
+          plannedAssertions.push(...plan.assertions);
+          if (!checked.allPassed) {
+            this.log("   新页面验收未通过，停止循环");
+            halted = true;
+          }
+        }
+        continue;
+      }
+
+      if (plan.assertions.length) {
+        const visibleAfter = await this.observer.captureInteractiveElements(page);
+        const checked = await this.verifier.verifyAll(page, plan.assertions, visibleAfter);
+        assertionResults.push(...checked.results);
+        plannedAssertions.push(...plan.assertions);
+        if (!checked.allPassed) halted = true;
+      }
+    }
+
+    if (executed >= maxSteps && !complete) {
+      this.log("达到步数上限 " + maxSteps + "，测试目标尚未完成");
+    }
+
+    const failedAssertions = assertionResults.filter((item) => !item.passed);
+    let overallStatus: AiUiTestReport["overallStatus"] = !halted && complete && failedAssertions.length === 0 ? "PASS" : "FAIL";
+    let diagnosis: AiUiTestReport["diagnosis"];
+    if (overallStatus === "PASS") {
+      this.log("🎉 目标完成，验收通过");
+    } else {
+      this.log("⚠️ 目标未完成或验收失败，进入诊断");
+      diagnosis = await this.healer.diagnose({
+        failedStepIndex: failedStepResult?.stepIndex,
+        failedStep: failedStepResult,
+        failedAssertions,
+        currentUrl: page.url(),
+        screenshotPath: failedStepResult?.screenshotPath || screenshots[screenshots.length - 1],
+        consoleErrors: executor.getCapturedConsoleErrors(),
+        recentElements: await this.observer.captureInteractiveElements(page),
+      });
+      this.log("   根因分类: [" + diagnosis.category + "] - " + diagnosis.rootCause);
+      this.log("   修复建议: " + diagnosis.suggestedFix);
+    }
+
+    const report: AiUiTestReport = {
+      goal,
+      plan: {
+        goalId: goal.id,
+        summary: summaries.join(" / ") || goal.name,
+        steps: plannedSteps,
+        assertions: plannedAssertions,
+        complete,
+        rawPlanText: rawPlans.join("\n\n"),
+      },
+      overallStatus,
+      stepResults,
+      assertionResults,
+      diagnosis,
+      startTime,
+      endTime: new Date().toISOString(),
+      durationMs: Date.now() - startTimestamp,
+      screenshots,
+    };
+    this.writeReports(report);
+    return report;
+  }
+
+  private writeReports(report: AiUiTestReport): void {
+    try {
+      if (!this.options.reportDir) return;
+      const jsonPath = JsonReporter.generate(report, this.options.reportDir);
+      const htmlPath = HtmlReporter.generate(report, this.options.reportDir);
+      this.log("📊 测试报告已生成:");
+      this.log("   - HTML: " + htmlPath);
+      this.log("   - JSON: " + jsonPath);
+    } catch (err: any) {
+      console.warn("[AiUiRunner] 生成报告失败: " + err.message);
+    }
+  }
+
 }
 
 /**
@@ -269,4 +467,25 @@ export async function runAiUiTest(
 ): Promise<AiUiTestReport> {
   const runner = new AiUiAutomationRunner(options);
   return runner.runTest(goal, page);
+}
+
+function pageKey(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return parsed.origin + parsed.pathname.replace(/\/$/, "") + parsed.search;
+  } catch {
+    return url;
+  }
+}
+
+function toHistory(results: StepExecutionResult[]): PlanHistoryItem[] {
+  return results
+    .filter((item) => item.plannedStep)
+    .map((item) => ({
+      description: item.plannedStep?.description || item.action.reasoning,
+      intent: item.plannedStep?.intent || item.action.action,
+      semanticTarget: item.plannedStep?.semanticTarget || "",
+      urlAfter: item.urlAfter,
+      status: item.status,
+    }));
 }

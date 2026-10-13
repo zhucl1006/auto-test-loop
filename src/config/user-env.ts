@@ -7,6 +7,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import readline from "readline"
+import { DEFAULT_REPORT_LANG, REPORT_LANG_KEY, resolveReportLanguage } from "./report-language.js"
 import { ANALYSIS_KEY, DECISION_KEY, DEFAULT_GEMINI_MODEL } from "./selection.js"
 
 export const CONFIGURED_FLAG = "AUTOTESTLOOP_CONFIGURED"
@@ -25,6 +26,8 @@ export const CONFIG_KEYS = [
   "DEEPSEEK_API_KEY",
   "DEEPSEEK_MODEL",
   "DEEPSEEK_BASE_URL",
+  REPORT_LANG_KEY,
+  "AUTO_MAX_STEPS",
 ]
 
 const DECISION_CHOICES = [
@@ -50,7 +53,7 @@ export function parseEnvFile(text: string): Record<string, string> {
     if (!trimmed || trimmed.startsWith("#")) continue
     const index = trimmed.indexOf("=")
     if (index <= 0) continue
-    values[trimmed.slice(0, index)] = trimmed.slice(index + 1)
+    values[trimmed.slice(0, index)] = trimmed.slice(index + 1).trim()
   }
   return values
 }
@@ -135,6 +138,9 @@ export async function ensureUserEnv(options: {
     }
   }
 
+  next[REPORT_LANG_KEY] = await askReportLanguage(ask, saved[REPORT_LANG_KEY] || "")
+  next.AUTO_MAX_STEPS = await askMaxSteps(ask, saved.AUTO_MAX_STEPS || "")
+
   writeConfig(configPath, next)
   applyMissingEnv(next)
   return { path: configPath, prompted: true }
@@ -177,7 +183,46 @@ async function askText(
 ): Promise<string> {
   const shown = current || fallback
   const answer = (await ask(label + "（回车使用 " + shown + "）: ", false)).trim()
-  return answer || current || fallback
+  return (answer || current || fallback).trim()
+}
+
+const REPORT_LANG_CHOICES = [
+  { id: "zh-CN", label: "简体中文", aliases: ["1", "zh-cn", "zh", "cn", "简体", "简体中文"] },
+  { id: "zh-TW", label: "繁体中文", aliases: ["2", "zh-tw", "tw", "繁体", "繁体中文", "繁體中文"] },
+  { id: "en", label: "English", aliases: ["3", "en", "english", "英文"] },
+]
+
+async function askReportLanguage(
+  ask: (label: string, secret: boolean) => Promise<string>,
+  current: string,
+): Promise<string> {
+  const fallback = resolveReportLanguage(current).code || DEFAULT_REPORT_LANG
+  const shown = resolveReportLanguage(fallback).label
+  console.log("报告语言:")
+  REPORT_LANG_CHOICES.forEach((choice, index) => {
+    const mark = choice.id === fallback ? "，当前/推荐" : ""
+    console.log("  " + (index + 1) + ". " + choice.label + mark)
+  })
+  console.log("  也可以直接输入其他语言名称。")
+  const answer = (await ask("请输入序号或语言名称（回车使用 " + shown + "）: ", false)).trim()
+  if (!answer) return fallback
+  const known = REPORT_LANG_CHOICES.find((choice) => choice.aliases.includes(answer.toLowerCase()) || choice.id.toLowerCase() === answer.toLowerCase())
+  return known ? known.id : answer
+}
+
+export function normalizeMaxSteps(value: string | undefined, fallback = "12"): string {
+  const parsed = Number((value || "").trim())
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 200) return fallback
+  return String(parsed)
+}
+
+async function askMaxSteps(
+  ask: (label: string, secret: boolean) => Promise<string>,
+  current: string,
+): Promise<string> {
+  const fallback = normalizeMaxSteps(current)
+  const answer = (await ask("单次最多执行步数（回车使用 " + fallback + "）: ", false)).trim()
+  return normalizeMaxSteps(answer, fallback)
 }
 
 export function askVisible(question: string): Promise<string> {

@@ -218,7 +218,8 @@ if (report.overallStatus === "FAIL") process.exit(1);
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | 仅当选择 DeepSeek 时使用 |
 | `WEB_URL` | 省略 `--url` 时的地址 |
 | `TEST_EMAIL` / `TEST_USERNAME` / `TEST_PASSWORD` | 目标需要登录时的默认账号。句子里的账密会覆盖它们 |
-| `AUTO_MAX_STEPS` | 自动模式步数上限 |
+| `AUTOTESTLOOP_REPORT_LANG` | 报告正文语言，默认 `zh-CN`。也接受 `zh-TW`、`en`，或其他语言名称 |
+| `AUTO_MAX_STEPS` | 自动模式步数上限，默认 `12`，最大 `200`。`config` 会询问；已保存的值覆盖项目 `.env`，`--max-steps` 只影响本次 |
 
 不要把真实 key、密码或验证码提交到仓库。
 
@@ -244,7 +245,7 @@ pnpm run build
 
 0.1.0 能完成计划、单步决策、执行、验收和一次自愈。它还不是每一步都重新规划的长程代理。
 
-- 自动模式的计划在开始时生成，执行中不会整份重写。
+- 自动模式会在 URL 变化后重新感知页面并规划下一批步骤，每进入一个页面验收一次，直到目标完成或达到步数上限。
 - 自愈大多是等待后重新验收。
 - `select`、`scroll`、上传、拖拽、多标签页和 iframe 还没有完整执行器。
 - 截图视觉分析还没有接进决策。

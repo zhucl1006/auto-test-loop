@@ -6,6 +6,7 @@
  * 2. 运用 LLM（或启发式回退）拆解为具体的操作步骤 (PlannedSteps) 与预期结果断言 (ExpectedAssertions)
  */
 
+import { withReportLanguage } from "../config/report-language.js"
 import {
   ExecutionPlan,
   LLMProvider,
@@ -13,6 +14,20 @@ import {
   ExpectedAssertion,
   TestGoal,
 } from "../types/index.js";
+
+export interface PlanHistoryItem {
+  description: string;
+  intent: string;
+  semanticTarget: string;
+  urlAfter?: string;
+  status: string;
+}
+
+export interface PlanRequest {
+  /** next-page 只规划下一次页面变化，供自主循环反复调用。 */
+  scope?: "full" | "next-page";
+  history?: PlanHistoryItem[];
+}
 
 export interface PageContext {
   url: string;
@@ -28,7 +43,7 @@ export interface PageContext {
 export class LlmPlanner {
   constructor(private llmProvider?: LLMProvider) {}
 
-  async plan(goal: TestGoal, pageContext?: PageContext): Promise<ExecutionPlan> {
+  async plan(goal: TestGoal, pageContext?: PageContext, request?: PlanRequest): Promise<ExecutionPlan> {
     if (goal.plannedSteps && goal.plannedSteps.length > 0) {
       return {
         goalId: goal.id,
@@ -40,7 +55,7 @@ export class LlmPlanner {
 
     if (this.llmProvider) {
       try {
-        return await this.planWithLLM(goal, pageContext);
+        return await this.planWithLLM(goal, pageContext, request);
       } catch (err: any) {
         console.warn(
           `[LlmPlanner] LLM planning failed, falling back to heuristic planner: ${err.message}`,
@@ -48,10 +63,10 @@ export class LlmPlanner {
       }
     }
 
-    return this.planWithHeuristics(goal);
+    return this.planWithHeuristics(goal, request);
   }
 
-  private async planWithLLM(goal: TestGoal, pageContext?: PageContext): Promise<ExecutionPlan> {
+  private async planWithLLM(goal: TestGoal, pageContext?: PageContext, request?: PlanRequest): Promise<ExecutionPlan> {
     const systemPrompt = `You are a QA planner for any website. Do not assume a product, login method, or URL structure.
 Read the natural-language goal and the observed page, then decide a short executable test.
 
@@ -63,6 +78,12 @@ Rules:
 5. Keep at most 12 steps. Mark uncertain steps optional.
 6. Assertions may only use url_contains, url_matches, text_visible, or element_visible.
 7. If the goal is exploratory, assert that the target page loaded and a relevant visible control or heading exists.
+${request?.scope === "next-page" ? `
+8. This call plans only the next page transition, at most 4 steps. The runner calls you again after the URL changes.
+9. Do not repeat completed steps. Use only observed elements.
+10. If the goal is already satisfied, set complete to true, return an empty steps array, and provide assertions that prove completion.
+11. Never use element_visible with expected "body". Assert a visible label, heading, or testid from the observed elements, or use url_contains.
+12. Set complete to false while goal work remains.` : ""}
 
 Return a JSON object conforming to this schema:
 {
@@ -84,8 +105,10 @@ Return a JSON object conforming to this schema:
       "type": "url_contains" | "url_matches" | "text_visible" | "element_visible",
       "expected": "expected value"
     }
-  ]
+  ],
+  "complete": boolean
 }`;
+    const systemPromptWithLanguage = withReportLanguage(systemPrompt);
 
     const observed = (pageContext?.elements || [])
       .slice(0, 40)
@@ -110,9 +133,10 @@ Target URL: ${goal.targetUrl}
 Current URL: ${pageContext?.url || "not opened yet"}
 Initial Context: ${JSON.stringify(goal.initialContext || {})}
 Observed elements:
-${observed || "none"}`;
+${observed || "none"}
+${request?.scope === "next-page" ? formatHistory(request.history) : ""}`;
 
-    const result = await this.llmProvider!.generateJson<any>(userPrompt, { systemPrompt });
+    const result = await this.llmProvider!.generateJson<any>(userPrompt, { systemPrompt: systemPromptWithLanguage });
 
     // 优先采用测试用例显式指定的确定性验收断言，消除 LLM 幻觉产生假数据断言
     const finalAssertions =
@@ -120,11 +144,13 @@ ${observed || "none"}`;
         ? goal.expectedAssertions
         : result.assertions || [];
 
+    const steps = Array.isArray(result.steps) ? result.steps : [];
     return {
       goalId: goal.id,
       summary: result.summary || goal.name,
-      steps: result.steps || [],
+      steps,
       assertions: finalAssertions,
+      complete: Boolean(result.complete) && steps.length === 0,
       rawPlanText: JSON.stringify(result, null, 2),
     };
   }
@@ -132,7 +158,16 @@ ${observed || "none"}`;
   /**
    * 启发式计划生成器（在无 LLM Key 或离线时提供确定性、高精度的测试用例规划）
    */
-  private planWithHeuristics(goal: TestGoal): ExecutionPlan {
+  private planWithHeuristics(goal: TestGoal, request?: PlanRequest): ExecutionPlan {
+    if (request?.history?.length) {
+      return {
+        goalId: goal.id,
+        summary: "本地规则不会在页面变化后继续规划",
+        steps: [],
+        assertions: goal.expectedAssertions || [],
+        complete: true,
+      };
+    }
     const desc = goal.description.toLowerCase();
     const steps: PlannedStep[] = [];
     const assertions: ExpectedAssertion[] = [];
@@ -360,4 +395,12 @@ ${observed || "none"}`;
       assertions: finalAssertions,
     };
   }
+}
+
+function formatHistory(history: PlanHistoryItem[] | undefined): string {
+  if (!history?.length) return "\nCompleted steps:\nnone";
+  const lines = history.map((item, index) =>
+    (index + 1) + ". " + item.status + " " + item.intent + " " + item.semanticTarget + " -> " + (item.urlAfter || "same page") + " (" + item.description + ")",
+  );
+  return "\nCompleted steps:\n" + lines.join("\n");
 }

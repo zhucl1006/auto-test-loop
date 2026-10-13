@@ -1,3 +1,5 @@
+import { resolveReportLanguage } from "./report-language.js"
+
 export type DecisionChoice = "jev" | "local"
 export type AnalysisChoice = "gemini" | "openai" | "deepseek" | "local"
 
@@ -39,5 +41,5 @@ export function describeSelection(): string {
       : analysis === "deepseek"
         ? "DeepSeek (" + (process.env.DEEPSEEK_MODEL || "deepseek-chat") + ")"
         : "本地规则"
-  return "决策模型: " + decisionText + "\n规划与诊断: " + analysisText
+  return "决策模型: " + decisionText + "\n规划与诊断: " + analysisText + "\n报告语言: " + resolveReportLanguage().label
 }
