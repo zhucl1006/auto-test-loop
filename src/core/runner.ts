@@ -292,6 +292,7 @@ export class AiUiAutomationRunner {
     let complete = false;
     let failedStepResult: StepExecutionResult | undefined;
     let previousSignature = "";
+    let escapeRecoveries = 0;
     let rounds = 0;
 
     while (executed < maxSteps && !halted && !complete && rounds < maxSteps) {
@@ -339,9 +340,41 @@ export class AiUiAutomationRunner {
         break;
       }
 
-      const signature = pageKey(page.url()) + "|" + plan.steps.map((step) => step.intent + ":" + step.semanticTarget).join(",");
+      const executableSteps = plan.steps.slice(0, Math.min(4, maxSteps - executed)).map(normalizeCloseStep);
+      const signature = pageKey(page.url()) + "|" + executableSteps.map((step) => step.intent + ":" + step.semanticTarget).join(",");
       if (signature === previousSignature) {
+        const modalStillOpen = Boolean(await this.observer.modalSignature(page));
+        if (modalStillOpen && escapeRecoveries < 2) {
+          escapeRecoveries += 1;
+          this.log("[执行] 重复的关闭计划无法定位按钮，改为按 Escape");
+          const recovered = await executor.executeAction(stepIndex, {
+            action: "press",
+            value: "Escape",
+            reasoning: "弹窗关闭按钮没有可识别文字，改为按 Escape",
+            confidence: 1,
+          }, { screenshotDir: this.options.screenshotDir });
+          stepResults.push(recovered);
+          if (recovered.screenshotPath) screenshots.push(recovered.screenshotPath);
+          executed += 1;
+          stepIndex += 1;
+          if (page.waitForTimeout) await page.waitForTimeout(400);
+          continue;
+        }
         this.log("规划没有推进，停止继续");
+        failedStepResult = {
+          stepIndex,
+          action: {
+            action: "click",
+            reasoning: "连续两轮规划相同且没有推进: " + signature,
+            confidence: 0,
+          },
+          status: "FAILED",
+          durationMs: 0,
+          urlBefore: page.url(),
+          urlAfter: page.url(),
+          error: "连续两轮规划相同且没有推进: " + signature,
+        };
+        halted = true;
         break;
       }
       previousSignature = signature;
@@ -351,7 +384,7 @@ export class AiUiAutomationRunner {
       let enteredNewPage = false;
       let enteredModal = false;
       const clickedTargets: string[] = [];
-      for (const step of plan.steps.slice(0, Math.min(4, maxSteps - executed))) {
+      for (const step of executableSteps) {
         plannedSteps.push(step);
         this.log("[执行] " + stepIndex + "/" + maxSteps + " · " + step.description);
         const visible = await this.observer.captureInteractiveElements(page);
@@ -577,4 +610,14 @@ function noteArrivalChecks(results: AiUiTestReport["assertionResults"], actualUr
       message: "已进入 " + actualUrl + "。跳转前编写的检查未在新页面成立，不中断后续覆盖。原结果: " + (item.message || item.actual || "未通过"),
     };
   });
+}
+
+function normalizeCloseStep<T extends { intent: string; semanticTarget: string; description: string; value?: string }>(step: T): T {
+  const target = (step.semanticTarget || "").trim();
+  const useless = !target || target === "-" || target === "x" || target === "×" || target === "✕" || target === "X";
+  const wantsClose = /关闭|關閉|close|dismiss|退出/i.test((step.description || "") + " " + target);
+  if (useless && wantsClose) {
+    return { ...step, intent: "press", semanticTarget: "Escape", value: "Escape" };
+  }
+  return step;
 }

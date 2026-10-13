@@ -225,4 +225,61 @@ describe("autonomous continuation", () => {
     expect(html).toContain("第 1 轮")
     expect(html).toContain("点击新建范本")
   })
+
+  it("关闭按钮没有文字时按 Escape，而不是因为重复计划停止", async () => {
+    let currentUrl = "https://example.test/app/contacts"
+    let dialog = "batch-invite"
+    const calls: string[] = []
+    const provider: LLMProvider = {
+      name: "close",
+      async generateText() { return "" },
+      async generateJson<T>(prompt: string): Promise<T> {
+        calls.push(prompt)
+        if (!dialog) {
+          return { summary: "弹窗已关闭", complete: true, steps: [], assertions: [] } as T
+        }
+        return {
+          summary: "关闭批量邀请进线弹窗",
+          complete: false,
+          steps: [{ stepIndex: 1, description: "点击弹窗右上角关闭按钮关闭批量邀请进线弹窗", intent: "click", semanticTarget: "-" }],
+          assertions: [{ assertionId: "stay", description: "仍在联系人页", type: "url_contains", expected: "/app/contacts" }],
+        } as T
+      },
+    }
+    const page: any = {
+      url: () => currentUrl,
+      goto: async () => {},
+      click: async () => {},
+      fill: async () => {},
+      hover: async () => {},
+      press: async (_selector: string, key: string) => { if (key === "Escape") dialog = "" },
+      waitForTimeout: async () => {},
+      waitForLoadState: async () => {},
+      screenshot: async () => Buffer.from("png"),
+      on: () => {},
+      locator: () => ({ first: () => ({ isVisible: async () => true }) }),
+      evaluate: async (fn: unknown) => {
+        const source = typeof fn === "function" ? fn.toString() : ""
+        if (source.includes('role="dialog"')) return dialog
+        return [{ targetId: 1, tagName: "button", text: "下一步", testId: "next", selector: "button", isVisible: true, isEnabled: true }]
+      },
+    }
+    const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), "atl-escape-"))
+    const report = await new AiUiAutomationRunner({
+      llmProvider: provider,
+      autonomous: true,
+      verbose: false,
+      reportDir,
+    }).runTest({
+      id: "escape_1",
+      name: "关闭无文字弹窗",
+      description: "关闭批量邀请进线弹窗后继续",
+      targetUrl: "https://example.test/app/contacts",
+      maxSteps: 4,
+    }, page)
+    fs.rmSync(reportDir, { recursive: true, force: true })
+    expect(report.overallStatus).toBe("PASS")
+    expect(report.stepResults.some((step) => step.action.action === "press" && step.action.value === "Escape")).toBe(true)
+    expect(calls.length).toBeGreaterThanOrEqual(2)
+  })
 })

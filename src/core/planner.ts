@@ -87,7 +87,8 @@ ${request?.scope === "next-page" ? `
 12. Set complete to false while goal work remains.
 13. If the goal asks to cover every sidebar or navigation item, complete is true only after every visible navigation link has been clicked in the completed steps. Do not treat a group heading as a link, and do not skip a visible nav link.
 14. Do not assert that the control you are about to click will remain visible after the URL changes.
-15. If a dialog is open, plan only inside that dialog: fill visible fields when needed, then close or cancel it. Do not click the page behind the dialog, and do not mark the goal complete merely because a dialog opened.` : ""}
+15. If a dialog is open, plan only inside that dialog: fill visible fields when needed, then close or cancel it. Do not click the page behind the dialog, and do not mark the goal complete merely because a dialog opened.
+16. semanticTarget must be visible text, a testid, or Escape. Never use "-", "x", or "×". To close an icon-only dialog, use intent press and semanticTarget Escape.` : ""}
 
 Return a JSON object conforming to this schema:
 {
