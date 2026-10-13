@@ -4,7 +4,7 @@ AI 自主测试循环。你给出目标，它建立计划，再观察页面、�
 
 AutoTestLoop is an open-source loop for autonomous browser testing. It can plan from a sentence, or follow a plan you already wrote.
 
-**当前版本：0.1.0。** 其他项目可以用一条 npx 命令运行。npm 短名称还没有发布；发布方法见文末。
+**当前版本：0.1.0。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
 
 ## 一次测试怎么走
 
@@ -78,13 +78,13 @@ HTML 和 JSON 报告写到 `test/reports/auto/`。HTML 会隐藏密码和验证�
 自动模式是默认模式。你只给一句目标和一个地址，计划由 AutoTestLoop 建立。
 
 ```bash
-npx --yes github:zhucl1006/auto-test-loop --mode auto --goal "打开定价页，确认有免费方案和购买按钮" --url "https://example.com/pricing"
+npx --yes auto-test-loop --mode auto --goal "打开定价页，确认有免费方案和购买按钮" --url "https://example.com/pricing"
 ```
 
 `--mode auto` 可以省略。需要登录时，把账号写进这句话。它只用于这一次运行，不会写入配置：
 
 ```bash
-npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密码 secret123 登录，并确认进入控制台" --url "https://your-app.example/login"
+npx --yes auto-test-loop --goal "用邮箱 qa@example.com、密码 secret123 登录，并确认进入控制台" --url "https://your-app.example/login"
 ```
 
 也可以写 `用手机号 13800138000、验证码 654321 登录`。如果这句话明显要登录，却没有识别到密码或验证码，运行时会再问一次。这次输入同样不保存。
@@ -133,7 +133,7 @@ npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密
 然后执行：
 
 ```bash
-npx --yes github:zhucl1006/auto-test-loop --mode plan --plan ./pricing.plan.json
+npx --yes auto-test-loop --mode plan --plan ./pricing.plan.json
 ```
 
 `semanticTarget` 可以使用页面上的文字，也可以使用 `testid:buy-button` 或 `selector:button[name=buy]`。仓库里的 [examples/pricing.plan.json](examples/pricing.plan.json) 是同一份示例。
@@ -169,7 +169,7 @@ npx --yes github:zhucl1006/auto-test-loop --mode plan --plan ./pricing.plan.json
 配置保存在 `~/.config/auto-test-loop/env`，只有当前用户能读。之后调整：
 
 ```bash
-npx --yes github:zhucl1006/auto-test-loop config
+npx --yes auto-test-loop config
 ```
 
 首次运行还会安装 Chromium。终端会隐藏目标里的密码。
@@ -252,13 +252,13 @@ pnpm run build
 
 ## 发布到 npm
 
-登录 npm 后，推送到 `main` 会自动发布尚未发布过的版本。发布完成后，任意目录可以执行：
+`auto-test-loop@0.1.0` 已发布。任意目录可以执行：
 
 ```bash
 npx auto-test-loop --goal "打开定价页，确认有免费方案" --url "https://example.com/pricing"
 ```
 
-自动发布不会重复发布同一个 `version`。要发下一版，先修改 `package.json` 的 `version`，再推送到 `main`。在自动发布生效前，仍使用 `github:zhucl1006/auto-test-loop`。
+推送到 `main` 时，如果 `package.json` 里的版本还没有发布过，GitHub Actions 会自动发布。同一个版本不会重复发布。要发下一版，先修改 `version`，再提交并推送。
 
 ## 许可
 
