@@ -83,7 +83,9 @@ ${request?.scope === "next-page" ? `
 9. Do not repeat completed steps. Use only observed elements.
 10. If the goal is already satisfied, set complete to true, return an empty steps array, and provide assertions that prove completion.
 11. Never use element_visible with expected "body". Do not invent a destination URL from a testid, label, or hyphenated slug. url_contains may only use a URL already present in the current page or completed steps. Otherwise assert text already visible, or omit the URL assertion.
-12. Set complete to false while goal work remains.` : ""}
+12. Set complete to false while goal work remains.
+13. If the goal asks to cover every sidebar or navigation item, complete is true only after every visible navigation link has been clicked in the completed steps. Do not treat a group heading as a link, and do not skip a visible nav link.
+14. Do not assert that the control you are about to click will remain visible after the URL changes.` : ""}
 
 Return a JSON object conforming to this schema:
 {

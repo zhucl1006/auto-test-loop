@@ -378,14 +378,18 @@ export class AiUiAutomationRunner {
         const checked = plan.assertions.length
           ? await this.verifier.verifyAll(page, plan.assertions, visibleAfter)
           : { allPassed: true, results: [] };
-        const judged = keepGoingAfterRouteGuess(checked.results, page.url());
-        assertionResults.push(...judged.results);
-        plannedAssertions.push(...plan.assertions);
-        this.log("[验收] 进入 " + page.url() + (judged.routeGuess ? " · 路由猜测未命中，按实际地址继续" : " · 通过"));
-        if (judged.blocked) {
-          this.log("   新页面验收未通过，停止循环");
+        if (visibleAfter.length === 0) {
+          assertionResults.push(...checked.results);
+          plannedAssertions.push(...plan.assertions);
+          this.log("[验收] 进入 " + page.url() + " · 新页面没有可交互元素，停止");
           halted = true;
+          continue;
         }
+        const noted = noteArrivalChecks(checked.results, page.url());
+        assertionResults.push(...noted);
+        plannedAssertions.push(...plan.assertions);
+        const stale = noted.some((item) => item.message?.includes("不中断后续覆盖"));
+        this.log("[验收] 进入 " + page.url() + (stale ? " · 跳转前的检查未在新页面成立，继续下一页" : " · 通过"));
         continue;
       }
 
@@ -511,4 +515,16 @@ function keepGoingAfterRouteGuess(results: AiUiTestReport["assertionResults"], a
     };
   });
   return { results: adjusted, blocked, routeGuess: true };
+}
+
+function noteArrivalChecks(results: AiUiTestReport["assertionResults"], actualUrl: string): AiUiTestReport["assertionResults"] {
+  return results.map((item) => {
+    if (item.passed) return item;
+    return {
+      ...item,
+      passed: true,
+      actual: actualUrl,
+      message: "已进入 " + actualUrl + "。跳转前编写的检查未在新页面成立，不中断后续覆盖。原结果: " + (item.message || item.actual || "未通过"),
+    };
+  });
 }

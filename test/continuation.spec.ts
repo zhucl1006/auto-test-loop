@@ -166,6 +166,6 @@ describe("autonomous continuation", () => {
     fs.rmSync(reportDir, { recursive: true, force: true })
     expect(report.overallStatus).toBe("PASS")
     expect(currentUrl).toBe("https://example.test/app/campaigns")
-    expect(report.assertionResults.some((item) => item.message?.includes("实际地址"))).toBe(true)
+    expect(report.assertionResults.some((item) => item.message?.includes("不中断后续覆盖"))).toBe(true)
   })
 })
