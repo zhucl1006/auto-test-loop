@@ -6,7 +6,7 @@
  * 3. MockLLMProvider (无网络依赖的确定性回退测试桩)
  */
 
-import { resolveAnalysis } from "../config/selection.js";
+import { DEFAULT_GEMINI_MODEL, resolveAnalysis } from "../config/selection.js";
 import { LLMProvider } from "../types/index.js";
 
 export class MockLLMProvider implements LLMProvider {
@@ -56,8 +56,7 @@ export class GeminiProvider implements LLMProvider {
 
   constructor(config: GeminiConfig = {}) {
     this.apiKey = config.apiKey || process.env.GEMINI_API_KEY || "";
-    // 默认使用快速且具备多模态能力的 gemini-1.5-flash / gemini-2.0-flash / 配置项
-    this.model = config.model || process.env.GEMINI_MODEL || "gemini-2.0-flash";
+    this.model = config.model || process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
     this.name = `GoogleGeminiProvider(${this.model})`;
   }
 

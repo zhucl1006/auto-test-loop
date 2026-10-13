@@ -7,7 +7,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import readline from "readline"
-import { ANALYSIS_KEY, DECISION_KEY } from "./selection.js"
+import { ANALYSIS_KEY, DECISION_KEY, DEFAULT_GEMINI_MODEL } from "./selection.js"
 
 export const CONFIGURED_FLAG = "AUTOTESTLOOP_CONFIGURED"
 
@@ -111,7 +111,7 @@ export async function ensureUserEnv(options: {
   next[ANALYSIS_KEY] = await askChoice(ask, "规划与诊断模型", ANALYSIS_CHOICES, analysisFallback)
   if (next[ANALYSIS_KEY] === "gemini") {
     next.GEMINI_API_KEY = await askSecret(ask, "Gemini API Key", saved.GEMINI_API_KEY || "")
-    next.GEMINI_MODEL = await askText(ask, "Gemini 模型名", saved.GEMINI_MODEL || "", "gemini-2.0-flash")
+    next.GEMINI_MODEL = await askText(ask, "Gemini 模型名", saved.GEMINI_MODEL || "", DEFAULT_GEMINI_MODEL)
     if (!next.GEMINI_API_KEY) {
       console.log("没有 Gemini Key，规划与诊断改为本地规则。")
       next[ANALYSIS_KEY] = "local"

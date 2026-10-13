@@ -3,6 +3,7 @@ export type AnalysisChoice = "gemini" | "openai" | "deepseek" | "local"
 
 export const DECISION_KEY = "AUTOTESTLOOP_DECISION"
 export const ANALYSIS_KEY = "AUTOTESTLOOP_ANALYSIS"
+export const DEFAULT_GEMINI_MODEL = "gemini-3.8-flash"
 
 export function resolveDecision(): DecisionChoice {
   const choice = (process.env.AUTOTESTLOOP_DECISION || "").toLowerCase()
@@ -32,7 +33,7 @@ export function describeSelection(): string {
     ? "Jev (" + (process.env.TYPESAFE_MODEL || "jev-latest") + ")"
     : "本地规则"
   const analysisText = analysis === "gemini"
-    ? "Gemini (" + (process.env.GEMINI_MODEL || "gemini-2.0-flash") + ")"
+    ? "Gemini (" + (process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL) + ")"
     : analysis === "openai"
       ? "OpenAI (" + (process.env.OPENAI_MODEL || "gpt-4o-mini") + ")"
       : analysis === "deepseek"
