@@ -50,6 +50,7 @@
     "playwright": "1.49.0"
   },
   "devDependencies": {
+    "@types/node": "^24.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
   },
