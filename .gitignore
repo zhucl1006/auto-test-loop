@@ -1,0 +1,30 @@
+# dependencies and build
+node_modules/
+dist/
+*.tsbuildinfo
+
+# secrets and local config
+.env
+.env.*
+!.env.example
+*.local
+credentials.json
+*.pem
+*.key
+
+# runtime artifacts may contain accounts, tokens, and screenshots
+test/reports/
+test/screenshots/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+playwright/.auth/
+storage-state*.json
+*.log
+
+# editor and OS
+.DS_Store
+.idea/
+.vscode/
+.code-review-graph/

@@ -1,0 +1,56 @@
+{
+  "name": "auto-test-loop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AutoTestLoop is an AI autonomous testing loop. It observes, decides, executes, verifies, and heals.",
+  "license": "MIT",
+  "bin": {
+    "autotestloop": "./dist/cli.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhucl1006/auto-test-loop.git"
+  },
+  "homepage": "https://github.com/zhucl1006/auto-test-loop#readme",
+  "bugs": {
+    "url": "https://github.com/zhucl1006/auto-test-loop/issues"
+  },
+  "keywords": [
+    "ai",
+    "testing",
+    "autonomous",
+    "playwright",
+    "browser-automation",
+    "self-healing"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "auto": "node dist/cli.js",
+    "aireach": "node targets/aireach/run-regression.mjs",
+    "aireach:ui": "node targets/aireach/run-suite.mjs",
+    "aireach:api": "node targets/aireach/api-functional.mjs",
+    "aireach:load": "node targets/aireach/load-regression.mjs"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "playwright": "1.49.0",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
