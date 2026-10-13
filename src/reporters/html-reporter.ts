@@ -15,7 +15,17 @@ import { redactSecrets } from "../core/goal-context.js";
 import { AiUiTestReport, StepExecutionResult } from "../types/index.js";
 
 function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
+function screenshotButton(src: string, name: string): string {
+  return `
+            <div class="screenshot-box">
+              <button type="button" class="shot-open" data-name="${escapeHtml(name)}" title="点击放大查看">
+                <img src="${src}" alt="现场截图" />
+              </button>
+              <div class="shot-hint">点击图片放大查看 · ${escapeHtml(name)}</div>
+            </div>`;
 }
 
 function displayInput(step: StepExecutionResult, secrets: Array<string | undefined>): string {
@@ -51,15 +61,9 @@ export class HtmlReporter {
           try {
             const base64 = fs.readFileSync(step.screenshotPath).toString("base64");
             const dataUrl = `data:image/png;base64,${base64}`;
-            imageTag = `
-            <div class="screenshot-box">
-              <a href="${dataUrl}" target="_blank" title="点击查看原图">
-                <img src="${dataUrl}" alt="现场截图" style="border: 1px solid #cbd5e1; border-radius: 6px; max-width: 100%; max-height: 320px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);" />
-              </a>
-              <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">📸 实时截图: <code>${path.basename(step.screenshotPath)}</code></div>
-            </div>`;
+            imageTag = screenshotButton(dataUrl, path.basename(step.screenshotPath));
           } catch {
-            imageTag = `<div class="screenshot-box"><img src="${step.screenshotPath}" alt="现场截图" /></div>`;
+            imageTag = screenshotButton(step.screenshotPath, path.basename(step.screenshotPath));
           }
         }
 
@@ -136,7 +140,18 @@ export class HtmlReporter {
     code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-family: monospace; }
     .error-box { background: #fef2f2; color: #991b1b; padding: 8px 12px; border-radius: 6px; margin-top: 8px; }
     .screenshot-box { margin-top: 12px; }
-    .screenshot-box img { max-width: 100%; max-height: 280px; border-radius: 6px; border: 1px solid #cbd5e1; }
+    .shot-open { display: block; width: 100%; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+    .shot-open img { display: block; width: 100%; max-height: 320px; object-fit: contain; object-position: left center; border-radius: 6px; border: 1px solid #cbd5e1; background: #fff; }
+    .shot-hint { font-size: 0.75rem; color: #64748b; margin-top: 4px; }
+    #shot-lightbox[hidden] { display: none; }
+    #shot-lightbox { position: fixed; inset: 0; z-index: 40; }
+    .shot-backdrop { position: absolute; inset: 0; background: rgba(15, 23, 42, 0.86); }
+    .shot-toolbar { position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 12px 16px; color: #e2e8f0; }
+    .shot-caption { margin-right: auto; font-size: 0.9rem; }
+    .shot-toolbar button { border: 0; border-radius: 6px; background: #e2e8f0; color: #0f172a; padding: 6px 10px; font: inherit; cursor: pointer; }
+    .shot-stage { position: absolute; inset: 58px 12px 12px; overflow: auto; }
+    .shot-stage img { display: block; margin: auto; box-shadow: 0 12px 40px rgba(0,0,0,.35); background: #fff; cursor: grab; }
+    .shot-stage img:active { cursor: grabbing; }
     .assertion-item { background: #fff; padding: 12px 16px; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 12px; border: 1px solid #e2e8f0; }
     .assert-pass { border-left: 4px solid #10b981; }
     .assert-fail { border-left: 4px solid #ef4444; }
@@ -174,11 +189,96 @@ export class HtmlReporter {
       ${assertionsHtml}
     </div>
 
-    <div class="section-title">🪜 操作执行流 (Step 01 ~ Step 03)</div>
+    <div class="section-title">🪜 操作执行流</div>
     <div class="steps-container">
       ${stepsHtml}
     </div>
   </div>
+  <div id="shot-lightbox" hidden>
+    <div class="shot-backdrop" data-close="1"></div>
+    <div class="shot-toolbar">
+      <span class="shot-caption"></span>
+      <button type="button" data-zoom="out" title="缩小">－</button>
+      <button type="button" data-zoom="fit" title="适应窗口">适应</button>
+      <button type="button" data-zoom="actual" title="原始大小">100%</button>
+      <button type="button" data-zoom="in" title="放大">＋</button>
+      <button type="button" data-close="1">关闭</button>
+    </div>
+    <div class="shot-stage"><img id="shot-full" alt="放大后的现场截图" /></div>
+  </div>
+  <script>
+    (() => {
+      const lightbox = document.getElementById("shot-lightbox");
+      const stage = lightbox.querySelector(".shot-stage");
+      const full = document.getElementById("shot-full");
+      const caption = lightbox.querySelector(".shot-caption");
+      let scale = 1;
+      const apply = (next) => {
+        if (!full.naturalWidth) return;
+        scale = Math.min(8, Math.max(0.2, next));
+        full.style.width = Math.round(full.naturalWidth * scale) + "px";
+        full.style.height = "auto";
+        full.style.maxWidth = "none";
+        full.style.maxHeight = "none";
+        caption.textContent = (full.dataset.name || "截图") + " · " + Math.round(scale * 100) + "%";
+      };
+      const fit = () => {
+        const availW = Math.max(stage.clientWidth - 24, 1);
+        const availH = Math.max(stage.clientHeight - 24, 1);
+        apply(Math.min(availW / full.naturalWidth, availH / full.naturalHeight, 1));
+      };
+      const open = (thumb, name) => {
+        full.dataset.name = name || "截图";
+        full.src = thumb.src;
+        lightbox.hidden = false;
+        document.body.style.overflow = "hidden";
+        const show = () => fit();
+        if (full.complete) show();
+        else full.onload = show;
+      };
+      const close = () => {
+        lightbox.hidden = true;
+        document.body.style.overflow = "";
+        full.removeAttribute("src");
+      };
+      document.querySelectorAll(".shot-open").forEach((button) => {
+        button.addEventListener("click", () => open(button.querySelector("img"), button.dataset.name));
+      });
+      lightbox.addEventListener("click", (event) => {
+        const zoom = event.target.closest("[data-zoom]");
+        if (event.target.closest("[data-close]")) close();
+        if (!zoom) return;
+        if (zoom.dataset.zoom === "in") apply(scale * 1.25);
+        if (zoom.dataset.zoom === "out") apply(scale / 1.25);
+        if (zoom.dataset.zoom === "fit") fit();
+        if (zoom.dataset.zoom === "actual") apply(1);
+      });
+      stage.addEventListener("wheel", (event) => {
+        event.preventDefault();
+        apply(scale * (event.deltaY < 0 ? 1.12 : 0.89));
+      }, { passive: false });
+      full.addEventListener("dblclick", () => { if (scale < 0.98) apply(1); else fit(); });
+      let drag = null;
+      stage.addEventListener("pointerdown", (event) => {
+        if (event.target !== full) return;
+        drag = { x: event.clientX, y: event.clientY, left: stage.scrollLeft, top: stage.scrollTop };
+        stage.setPointerCapture(event.pointerId);
+      });
+      stage.addEventListener("pointermove", (event) => {
+        if (!drag) return;
+        stage.scrollLeft = drag.left - (event.clientX - drag.x);
+        stage.scrollTop = drag.top - (event.clientY - drag.y);
+      });
+      stage.addEventListener("pointerup", () => { drag = null; });
+      document.addEventListener("keydown", (event) => {
+        if (lightbox.hidden) return;
+        if (event.key === "Escape") close();
+        if (event.key === "+" || event.key === "=") apply(scale * 1.25);
+        if (event.key === "-" || event.key === "_") apply(scale / 1.25);
+        if (event.key === "0") fit();
+      });
+    })();
+  </script>
 </body>
 </html>`;
 

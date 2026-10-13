@@ -82,7 +82,7 @@ ${request?.scope === "next-page" ? `
 8. This call plans only the next page transition, at most 4 steps. The runner calls you again after the URL changes.
 9. Do not repeat completed steps. Use only observed elements.
 10. If the goal is already satisfied, set complete to true, return an empty steps array, and provide assertions that prove completion.
-11. Never use element_visible with expected "body". Assert a visible label, heading, or testid from the observed elements, or use url_contains.
+11. Never use element_visible with expected "body". Do not invent a destination URL from a testid, label, or hyphenated slug. url_contains may only use a URL already present in the current page or completed steps. Otherwise assert text already visible, or omit the URL assertion.
 12. Set complete to false while goal work remains.` : ""}
 
 Return a JSON object conforming to this schema:

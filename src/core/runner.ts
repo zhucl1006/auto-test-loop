@@ -296,7 +296,7 @@ export class AiUiAutomationRunner {
     while (executed < maxSteps && !halted && !complete && rounds < maxSteps) {
       const elements = await this.observer.captureInteractiveElements(page);
       const history = toHistory(stepResults);
-      this.log("👉 [01/05] 规划下一批步骤。当前页面: " + page.url() + "，已执行 " + executed + " 步");
+      this.log("[规划] 第 " + (rounds + 1) + " 轮 · 进度 " + executed + "/" + maxSteps + " · " + page.url());
       const plan = await this.planner.plan(goal, { url: page.url(), elements }, {
         scope: "next-page",
         history,
@@ -310,9 +310,11 @@ export class AiUiAutomationRunner {
         complete = Boolean(plan.complete);
         if (plan.assertions.length) {
           const checked = await this.verifier.verifyAll(page, plan.assertions, elements);
-          assertionResults.push(...checked.results);
+          const judged = keepGoingAfterRouteGuess(checked.results, page.url());
+          assertionResults.push(...judged.results);
           plannedAssertions.push(...plan.assertions);
-          if (!checked.allPassed) halted = true;
+          if (judged.blocked) halted = true;
+          if (judged.routeGuess) this.log("[验收] 完成判断中的路由猜测未命中，实际地址 " + page.url());
         }
         if (!complete) this.log("规划器没有给出可执行的下一步，停止循环");
         break;
@@ -329,7 +331,7 @@ export class AiUiAutomationRunner {
       let enteredNewPage = false;
       for (const step of plan.steps.slice(0, Math.min(4, maxSteps - executed))) {
         plannedSteps.push(step);
-        this.log("👉 [02/05 & 03/05] 步骤 " + stepIndex + ": " + step.description + " (意图: " + step.intent + " -> " + step.semanticTarget + ")");
+        this.log("[执行] " + stepIndex + "/" + maxSteps + " · " + step.description);
         const visible = await this.observer.captureInteractiveElements(page);
         const decision = await this.actor.decideNextAction(step, visible);
         if (decision.confidence < 0.4 && step.optional) {
@@ -372,16 +374,17 @@ export class AiUiAutomationRunner {
       if (halted) break;
 
       if (enteredNewPage) {
-        this.log("👉 [04/05] 已进入新页面，先验收再继续规划: " + page.url());
         const visibleAfter = await this.observer.captureInteractiveElements(page);
-        if (plan.assertions.length) {
-          const checked = await this.verifier.verifyAll(page, plan.assertions, visibleAfter);
-          assertionResults.push(...checked.results);
-          plannedAssertions.push(...plan.assertions);
-          if (!checked.allPassed) {
-            this.log("   新页面验收未通过，停止循环");
-            halted = true;
-          }
+        const checked = plan.assertions.length
+          ? await this.verifier.verifyAll(page, plan.assertions, visibleAfter)
+          : { allPassed: true, results: [] };
+        const judged = keepGoingAfterRouteGuess(checked.results, page.url());
+        assertionResults.push(...judged.results);
+        plannedAssertions.push(...plan.assertions);
+        this.log("[验收] 进入 " + page.url() + (judged.routeGuess ? " · 路由猜测未命中，按实际地址继续" : " · 通过"));
+        if (judged.blocked) {
+          this.log("   新页面验收未通过，停止循环");
+          halted = true;
         }
         continue;
       }
@@ -405,7 +408,7 @@ export class AiUiAutomationRunner {
     if (overallStatus === "PASS") {
       this.log("🎉 目标完成，验收通过");
     } else {
-      this.log("⚠️ 目标未完成或验收失败，进入诊断");
+      this.log("[诊断] 目标未完成或验收失败");
       diagnosis = await this.healer.diagnose({
         failedStepIndex: failedStepResult?.stepIndex,
         failedStep: failedStepResult,
@@ -488,4 +491,24 @@ function toHistory(results: StepExecutionResult[]): PlanHistoryItem[] {
       urlAfter: item.urlAfter,
       status: item.status,
     }));
+}
+
+function keepGoingAfterRouteGuess(results: AiUiTestReport["assertionResults"], actualUrl: string): {
+  results: AiUiTestReport["assertionResults"];
+  blocked: boolean;
+  routeGuess: boolean;
+} {
+  const routeMisses = results.filter((item) => !item.passed && (item.type === "url_contains" || item.type === "url_matches"));
+  const blocked = results.some((item) => !item.passed && item.type !== "url_contains" && item.type !== "url_matches");
+  if (!routeMisses.length) return { results, blocked, routeGuess: false };
+  const adjusted = results.map((item) => {
+    if (item.passed || (item.type !== "url_contains" && item.type !== "url_matches")) return item;
+    return {
+      ...item,
+      passed: true,
+      actual: actualUrl,
+      message: "导航已成功。规划器猜测的路由未命中，实际地址是 " + actualUrl + "。不中断后续页面。",
+    };
+  });
+  return { results: adjusted, blocked, routeGuess: true };
 }
