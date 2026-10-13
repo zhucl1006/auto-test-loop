@@ -6,6 +6,7 @@
  * 3. MockLLMProvider (无网络依赖的确定性回退测试桩)
  */
 
+import { resolveAnalysis } from "../config/selection.js";
 import { LLMProvider } from "../types/index.js";
 
 export class MockLLMProvider implements LLMProvider {
@@ -56,7 +57,7 @@ export class GeminiProvider implements LLMProvider {
   constructor(config: GeminiConfig = {}) {
     this.apiKey = config.apiKey || process.env.GEMINI_API_KEY || "";
     // 默认使用快速且具备多模态能力的 gemini-1.5-flash / gemini-2.0-flash / 配置项
-    this.model = config.model || process.env.GEMINI_MODEL || "gemini-1.5-flash";
+    this.model = config.model || process.env.GEMINI_MODEL || "gemini-2.0-flash";
     this.name = `GoogleGeminiProvider(${this.model})`;
   }
 
@@ -245,11 +246,23 @@ export class OpenAILikeProvider implements LLMProvider {
  * 3. 无配置时 -> 返回 undefined，系统平滑降级为高性能本地规则引擎
  */
 export function createAutoLLMProvider(): LLMProvider | undefined {
-  if (process.env.GEMINI_API_KEY) {
+  const choice = resolveAnalysis();
+  if (choice === "gemini" && process.env.GEMINI_API_KEY) {
     return new GeminiProvider({ apiKey: process.env.GEMINI_API_KEY });
   }
-  if (process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY) {
-    return new OpenAILikeProvider();
+  if (choice === "openai" && process.env.OPENAI_API_KEY) {
+    return new OpenAILikeProvider({
+      apiKey: process.env.OPENAI_API_KEY,
+      baseURL: process.env.OPENAI_BASE_URL,
+      model: process.env.OPENAI_MODEL,
+    });
+  }
+  if (choice === "deepseek" && process.env.DEEPSEEK_API_KEY) {
+    return new OpenAILikeProvider({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
+      model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+    });
   }
   return undefined;
 }

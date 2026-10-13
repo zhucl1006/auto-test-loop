@@ -5,16 +5,24 @@
 
 import { ActionDecision, ElementSnapshot, PlannedStep } from "../types/index.js";
 
+import { resolveDecision } from "../config/selection.js";
+
 const JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
-const JEV_MODEL = process.env.TYPESAFE_MODEL || "jev-latest";
-const MIN_CONFIDENCE = Number(process.env.JEV_MIN_CONFIDENCE || "0.4");
+
+function jevModel(): string {
+  return process.env.TYPESAFE_MODEL || "jev-latest";
+}
+
+function jevMinConfidence(): number {
+  return Number(process.env.JEV_MIN_CONFIDENCE || "0.4");
+}
 
 export function jevDecisionEnabled(): boolean {
-  return Boolean(process.env.TYPESAFE_API_KEY);
+  return resolveDecision() === "jev";
 }
 
 export function jevDecisionName(): string {
-  return jevDecisionEnabled() ? "Jev (" + JEV_MODEL + ")" : "本地规则";
+  return jevDecisionEnabled() ? "Jev (" + jevModel() + ")" : "本地规则";
 }
 
 interface JevChoiceAnswer {
@@ -45,7 +53,7 @@ export async function chooseElementWithJev(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: JEV_MODEL,
+      model: jevModel(),
       state: {
         action: step.intent,
         target: step.semanticTarget,
@@ -79,7 +87,7 @@ export async function chooseElementWithJev(
     answers?: { target?: JevChoiceAnswer };
   };
   const answer = payload.answers?.target;
-  if (!answer || answer.choice === "none" || answer.confidence < MIN_CONFIDENCE) return null;
+  if (!answer || answer.choice === "none" || answer.confidence < jevMinConfidence()) return null;
 
   const targetId = Number(answer.choice.replace(/^e/, ""));
   const element = candidates.find((item) => item.targetId === targetId);

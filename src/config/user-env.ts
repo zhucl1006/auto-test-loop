@@ -1,22 +1,43 @@
 /**
  * 本机模型配置。
- * 只保存模型密钥和配置完成标记，不保存账密。
+ * 先选择决策模型和规划模型，再只询问对应的 key。不保存账密。
  */
 
 import fs from "fs"
 import os from "os"
 import path from "path"
 import readline from "readline"
+import { ANALYSIS_KEY, DECISION_KEY } from "./selection.js"
 
 export const CONFIGURED_FLAG = "AUTOTESTLOOP_CONFIGURED"
 
-export const MODEL_PROMPTS = [
-  { key: "TYPESAFE_API_KEY", label: "Jev / TypeSafe API Key", secret: true },
-  { key: "GEMINI_API_KEY", label: "Gemini API Key", secret: true },
-  { key: "OPENAI_API_KEY", label: "OpenAI API Key", secret: true },
-  { key: "OPENAI_BASE_URL", label: "OpenAI 兼容接口地址", secret: false },
-  { key: "DEEPSEEK_API_KEY", label: "DeepSeek API Key", secret: true },
-] as const
+export const CONFIG_KEYS = [
+  CONFIGURED_FLAG,
+  DECISION_KEY,
+  ANALYSIS_KEY,
+  "TYPESAFE_API_KEY",
+  "TYPESAFE_MODEL",
+  "GEMINI_API_KEY",
+  "GEMINI_MODEL",
+  "OPENAI_API_KEY",
+  "OPENAI_MODEL",
+  "OPENAI_BASE_URL",
+  "DEEPSEEK_API_KEY",
+  "DEEPSEEK_MODEL",
+  "DEEPSEEK_BASE_URL",
+]
+
+const DECISION_CHOICES = [
+  { id: "jev", label: "Jev，负责选择页面元素", aliases: ["1", "jev", "j"] },
+  { id: "local", label: "本地规则", aliases: ["2", "local", "本地", "规则"] },
+]
+
+const ANALYSIS_CHOICES = [
+  { id: "gemini", label: "Gemini，负责规划与诊断", aliases: ["1", "gemini", "g"] },
+  { id: "openai", label: "OpenAI", aliases: ["2", "openai"] },
+  { id: "deepseek", label: "DeepSeek", aliases: ["3", "deepseek", "ds"] },
+  { id: "local", label: "本地规则", aliases: ["4", "local", "本地", "规则"] },
+]
 
 export function defaultConfigPath(): string {
   return path.join(os.homedir(), ".config", "auto-test-loop", "env")
@@ -48,6 +69,12 @@ export function applyMissingEnv(values: Record<string, string>): void {
   }
 }
 
+export function parseChoice(answer: string, choices: { id: string; aliases: string[] }[], fallback: string): string {
+  const normalized = answer.trim().toLowerCase()
+  if (!normalized) return fallback
+  return choices.find((choice) => choice.aliases.includes(normalized) || choice.id === normalized)?.id || fallback
+}
+
 export async function ensureUserEnv(options: {
   force?: boolean
   interactive?: boolean
@@ -59,31 +86,98 @@ export async function ensureUserEnv(options: {
   applyMissingEnv(saved)
 
   const interactive = options.interactive ?? false
-  const configured = saved[CONFIGURED_FLAG] === "1"
-  if (!options.force && (configured || !interactive)) {
-    return { path: configPath, prompted: false }
-  }
-
-  const pending = MODEL_PROMPTS.filter((item) => options.force || !(process.env[item.key] || saved[item.key]))
-  const next: Record<string, string> = { ...saved, [CONFIGURED_FLAG]: "1" }
-  if (pending.length === 0) {
-    writeConfig(configPath, next)
+  const selectionReady = Boolean(saved[DECISION_KEY] && saved[ANALYSIS_KEY])
+  if (!options.force && (!interactive || (saved[CONFIGURED_FLAG] === "1" && selectionReady))) {
     return { path: configPath, prompted: false }
   }
 
   const ask = options.ask || askOnTerminal
-  console.log("首次使用可以输入模型密钥。直接回车表示跳过。")
-  console.log("配置只保存在本机，下次不再询问: " + configPath)
-  for (const item of pending) {
-    const current = process.env[item.key] || saved[item.key] || ""
-    const hint = current ? "，回车保留已有值" : "，可回车跳过"
-    const answer = (await ask(item.label + hint + ": ", item.secret)).trim()
-    if (answer) next[item.key] = answer
-    else if (current) next[item.key] = current
+  const next: Record<string, string> = { ...saved, [CONFIGURED_FLAG]: "1" }
+  console.log("请选择要使用的模型。直接回车表示使用推荐项或保留已有值。")
+  console.log("配置只保存在本机: " + configPath)
+
+  const decisionFallback = saved[DECISION_KEY] || "jev"
+  next[DECISION_KEY] = await askChoice(ask, "单步决策模型", DECISION_CHOICES, decisionFallback)
+  if (next[DECISION_KEY] === "jev") {
+    next.TYPESAFE_API_KEY = await askSecret(ask, "Jev / TypeSafe API Key", saved.TYPESAFE_API_KEY || "")
+    next.TYPESAFE_MODEL = await askText(ask, "Jev 模型名", saved.TYPESAFE_MODEL || "", "jev-latest")
+    if (!next.TYPESAFE_API_KEY) {
+      console.log("没有 Jev Key，决策模型改为本地规则。")
+      next[DECISION_KEY] = "local"
+    }
   }
+
+  const analysisFallback = saved[ANALYSIS_KEY] || "gemini"
+  next[ANALYSIS_KEY] = await askChoice(ask, "规划与诊断模型", ANALYSIS_CHOICES, analysisFallback)
+  if (next[ANALYSIS_KEY] === "gemini") {
+    next.GEMINI_API_KEY = await askSecret(ask, "Gemini API Key", saved.GEMINI_API_KEY || "")
+    next.GEMINI_MODEL = await askText(ask, "Gemini 模型名", saved.GEMINI_MODEL || "", "gemini-2.0-flash")
+    if (!next.GEMINI_API_KEY) {
+      console.log("没有 Gemini Key，规划与诊断改为本地规则。")
+      next[ANALYSIS_KEY] = "local"
+    }
+  } else if (next[ANALYSIS_KEY] === "openai") {
+    next.OPENAI_API_KEY = await askSecret(ask, "OpenAI API Key", saved.OPENAI_API_KEY || "")
+    next.OPENAI_MODEL = await askText(ask, "OpenAI 模型名", saved.OPENAI_MODEL || "", "gpt-4o-mini")
+    next.OPENAI_BASE_URL = await askText(ask, "OpenAI 兼容接口地址", saved.OPENAI_BASE_URL || "", "留空使用官方地址")
+    if (next.OPENAI_BASE_URL === "留空使用官方地址") delete next.OPENAI_BASE_URL
+    if (!next.OPENAI_API_KEY) {
+      console.log("没有 OpenAI Key，规划与诊断改为本地规则。")
+      next[ANALYSIS_KEY] = "local"
+    }
+  } else if (next[ANALYSIS_KEY] === "deepseek") {
+    next.DEEPSEEK_API_KEY = await askSecret(ask, "DeepSeek API Key", saved.DEEPSEEK_API_KEY || "")
+    next.DEEPSEEK_MODEL = await askText(ask, "DeepSeek 模型名", saved.DEEPSEEK_MODEL || "", "deepseek-chat")
+    next.DEEPSEEK_BASE_URL = saved.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1"
+    if (!next.DEEPSEEK_API_KEY) {
+      console.log("没有 DeepSeek Key，规划与诊断改为本地规则。")
+      next[ANALYSIS_KEY] = "local"
+    }
+  }
+
   writeConfig(configPath, next)
   applyMissingEnv(next)
   return { path: configPath, prompted: true }
+}
+
+async function askChoice(
+  ask: (label: string, secret: boolean) => Promise<string>,
+  title: string,
+  choices: { id: string; label: string; aliases: string[] }[],
+  fallback: string,
+): Promise<string> {
+  console.log(title + ":")
+  choices.forEach((choice, index) => {
+    const current = choice.id === fallback ? "，当前/推荐" : ""
+    console.log("  " + (index + 1) + ". " + choice.label + current)
+  })
+  const answer = await ask("请输入序号: ", false)
+  const selected = parseChoice(answer, choices, fallback)
+  if (answer.trim() && selected === fallback && !choices.some((choice) => choice.aliases.includes(answer.trim().toLowerCase()))) {
+    console.log("没有识别这个选项，使用 " + fallback + "。")
+  }
+  return selected
+}
+
+async function askSecret(
+  ask: (label: string, secret: boolean) => Promise<string>,
+  label: string,
+  current: string,
+): Promise<string> {
+  const hint = current ? "，回车保留已保存的值" : "，可回车跳过"
+  const answer = (await ask(label + hint + ": ", true)).trim()
+  return answer || current
+}
+
+async function askText(
+  ask: (label: string, secret: boolean) => Promise<string>,
+  label: string,
+  current: string,
+  fallback: string,
+): Promise<string> {
+  const shown = current || fallback
+  const answer = (await ask(label + "（回车使用 " + shown + "）: ", false)).trim()
+  return answer || current || fallback
 }
 
 export function askVisible(question: string): Promise<string> {

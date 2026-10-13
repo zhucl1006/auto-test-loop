@@ -8,10 +8,10 @@
 
 import dotenv from "dotenv"
 import { chromium } from "playwright"
+import { describeSelection } from "./config/selection.js"
 import { askHidden, askVisible, ensureUserEnv } from "./config/user-env.js"
 import { extractGoalContext, goalNeedsCredentials, redactSecrets } from "./core/goal-context.js"
 import { runAiUiTest } from "./core/runner.js"
-import { jevDecisionName } from "./llm/jev-decider.js"
 import { createAutoLLMProvider } from "./llm/provider.js"
 import { ensureChromium } from "./runtime/browser.js"
 import { TestGoal } from "./types/index.js"
@@ -21,10 +21,23 @@ function readArg(args: string[], name: string): string | undefined {
   return index >= 0 ? args[index + 1] : undefined
 }
 
+function readCommand(args: string[]): string | undefined {
+  const valued = new Set(["--goal", "--url", "--report-dir", "--screenshot-dir"])
+  for (let index = 0; index < args.length; index += 1) {
+    if (valued.has(args[index])) {
+      index += 1
+      continue
+    }
+    if (!args[index].startsWith("-")) return args[index]
+  }
+  return undefined
+}
+
 function printHelp(): void {
   console.log(`AutoTestLoop
 
 用法:
+  npx --yes github:zhucl1006/auto-test-loop config
   npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密码 secret 登录" --url "https://example.com/login"
 
 参数:
@@ -33,7 +46,8 @@ function printHelp(): void {
   --headed         显示浏览器
   --report-dir     报告目录
   --screenshot-dir 截图目录
-  --configure      重新输入并保存模型密钥
+  config           选择模型并保存对应的 key，之后可重复调整
+  --configure      同 config，调整后继续执行本次目标
   --no-prompt      不询问，适合 CI
   --help           显示帮助
 `)
@@ -80,11 +94,19 @@ async function main() {
     return
   }
 
+  const command = readCommand(args)
+  const configuring = command === "config" || command === "configure" || args.includes("--configure")
   const interactive = !args.includes("--no-prompt") && Boolean(process.stdin.isTTY && process.stdout.isTTY)
+  if (configuring && !interactive) throw new Error("config 需要在交互终端中运行")
   await ensureUserEnv({
-    force: args.includes("--configure"),
+    force: configuring,
     interactive,
   })
+  if (command === "config" || command === "configure") {
+    console.log("配置已保存")
+    console.log(describeSelection())
+    return
+  }
 
   const goalText = readArg(args, "--goal") || "打开页面，确认主要内容和关键操作入口可见"
   const url = readArg(args, "--url") || process.env.WEB_URL
@@ -108,8 +130,7 @@ async function main() {
   console.log("页面: " + url)
   const contextSummary = describeContext(context)
   if (contextSummary) console.log("登录信息: " + contextSummary)
-  console.log("决策模型: " + jevDecisionName())
-  console.log("分析模型: " + (llmProvider ? llmProvider.name : "本地启发式分析"))
+  console.log(describeSelection())
 
   ensureChromium()
   const goal: TestGoal = {

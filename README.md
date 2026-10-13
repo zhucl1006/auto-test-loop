@@ -4,7 +4,7 @@ AI 自主测试循环。你给出目标，它自己观察页面、决定下一�
 
 AutoTestLoop is an open-source loop for autonomous browser testing. Point it at any website from the command line.
 
-**当前版本：0.1.0。** 其他项目可以用一条 `npx` 命令运行。npm 短名称还没有发布，所以现在使用 GitHub 地址。第一次运行会询问模型密钥并安装 Chromium，之后不再询问。
+**当前版本：0.1.0。** 其他项目可以用一条 `npx` 命令运行。第一次会让你选择模型并输入对应的 key，之后用 `config` 调整。
 
 ## English quick start
 
@@ -102,7 +102,15 @@ npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密
 
 也可以写手机号和验证码，例如 `用手机号 13800138000、验证码 654321 登录`。
 
-第一次运行会询问模型密钥。直接回车可以跳过。已输入的密钥保存在 `~/.config/auto-test-loop/env`，文件权限只有当前用户可读，下次不再询问。重新输入使用 `--configure`。CI 或不想询问时加 `--no-prompt`。
+第一次运行会先问使用哪个模型，再只要求输入该模型的 key。默认推荐 Jev 做单步决策，Gemini 做规划与诊断。没有选择 OpenAI 或 DeepSeek 时，不会询问它们的 key。
+
+已输入的选择和密钥保存在 `~/.config/auto-test-loop/env`，文件权限只有当前用户可读。之后要调整，执行：
+
+```bash
+npx --yes github:zhucl1006/auto-test-loop config
+```
+
+CI 或不想询问时加 `--no-prompt`。
 
 如果目标明显需要登录，但这句话里没有识别到密码或验证码，运行时会再问一次。这次输入的账密不会保存。
 

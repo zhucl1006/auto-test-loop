@@ -2,48 +2,83 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { afterEach, describe, expect, it } from "vitest"
-import { CONFIGURED_FLAG, ensureUserEnv, MODEL_PROMPTS } from "../src/config/user-env.js"
+import { describeSelection } from "../src/config/selection.js"
+import { CONFIG_KEYS, ensureUserEnv, parseChoice } from "../src/config/user-env.js"
+import { createAutoLLMProvider } from "../src/llm/provider.js"
 
-const keys = [CONFIGURED_FLAG, ...MODEL_PROMPTS.map((item) => item.key)]
-const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+const previous = Object.fromEntries(CONFIG_KEYS.map((key) => [key, process.env[key]]))
 
 afterEach(() => {
-  for (const key of keys) {
+  for (const key of CONFIG_KEYS) {
     if (previous[key] === undefined) delete process.env[key]
     else process.env[key] = previous[key]
   }
 })
 
-describe("user env", () => {
-  it("首次输入后保存，第二次不再询问", async () => {
-    for (const key of keys) delete process.env[key]
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "autotestloop-"))
-    const configPath = path.join(dir, "env")
-    const answers = ["jev-key", "", "", "", ""]
+function tempConfig(): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "autotestloop-"))
+  return path.join(dir, "env")
+}
+
+describe("model config", () => {
+  it("先选择 Jev 和 Gemini，只保存对应的 key", async () => {
+    for (const key of CONFIG_KEYS) delete process.env[key]
+    const configPath = tempConfig()
+    const answers = ["1", "jev-key", "", "1", "gemini-key", ""]
     const first = await ensureUserEnv({
       interactive: true,
       configPath,
       ask: async () => answers.shift() || "",
     })
+    const saved = fs.readFileSync(configPath, "utf8")
     expect(first.prompted).toBe(true)
-    expect(process.env.TYPESAFE_API_KEY).toBe("jev-key")
-    expect(fs.readFileSync(configPath, "utf8")).toContain("TYPESAFE_API_KEY=jev-key")
-    expect(fs.readFileSync(configPath, "utf8")).not.toContain("password")
-    expect(fs.statSync(configPath).mode & 0o777).toBe(0o600)
+    expect(saved).toContain("AUTOTESTLOOP_DECISION=jev")
+    expect(saved).toContain("TYPESAFE_API_KEY=jev-key")
+    expect(saved).toContain("AUTOTESTLOOP_ANALYSIS=gemini")
+    expect(saved).toContain("GEMINI_API_KEY=gemini-key")
+    expect(saved).not.toContain("OPENAI_API_KEY=")
+    expect(saved).not.toContain("DEEPSEEK_API_KEY=")
+    expect(describeSelection()).toContain("Jev")
+    expect(describeSelection()).toContain("Gemini")
+    expect(createAutoLLMProvider()?.name).toContain("Gemini")
 
     delete process.env.TYPESAFE_API_KEY
+    delete process.env.GEMINI_API_KEY
     let asked = false
     const second = await ensureUserEnv({
       interactive: true,
       configPath,
       ask: async () => {
         asked = true
-        return "should-not-ask"
+        return "2"
       },
     })
     expect(second.prompted).toBe(false)
     expect(asked).toBe(false)
     expect(process.env.TYPESAFE_API_KEY).toBe("jev-key")
-    fs.rmSync(dir, { recursive: true, force: true })
+    fs.rmSync(path.dirname(configPath), { recursive: true, force: true })
+  })
+
+  it("选择 DeepSeek 时不询问 Gemini key", async () => {
+    for (const key of CONFIG_KEYS) delete process.env[key]
+    const configPath = tempConfig()
+    const answers = ["2", "3", "ds-key", ""]
+    await ensureUserEnv({
+      interactive: true,
+      configPath,
+      ask: async () => answers.shift() || "",
+    })
+    const saved = fs.readFileSync(configPath, "utf8")
+    expect(saved).toContain("AUTOTESTLOOP_DECISION=local")
+    expect(saved).toContain("AUTOTESTLOOP_ANALYSIS=deepseek")
+    expect(saved).toContain("DEEPSEEK_API_KEY=ds-key")
+    expect(saved).not.toContain("GEMINI_API_KEY=")
+    expect(createAutoLLMProvider()?.name).toContain("deepseek-chat")
+    fs.rmSync(path.dirname(configPath), { recursive: true, force: true })
+  })
+
+  it("无法识别的序号回退到推荐项", () => {
+    expect(parseChoice("nope", [{ id: "jev", aliases: ["1", "jev"] }], "jev")).toBe("jev")
+    expect(parseChoice("3", [{ id: "deepseek", aliases: ["3", "deepseek"] }], "gemini")).toBe("deepseek")
   })
 })
