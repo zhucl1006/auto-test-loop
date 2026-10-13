@@ -129,6 +129,16 @@ export interface FailureContext {
   recentElements?: ElementSnapshot[];
 }
 
+export interface PlanRound {
+  round: number;
+  url: string;
+  summary: string;
+  steps: PlannedStep[];
+  assertions: ExpectedAssertion[];
+  complete?: boolean;
+  modalOpen?: boolean;
+}
+
 export interface AiUiTestReport {
   goal: TestGoal;
   plan: ExecutionPlan;
@@ -140,6 +150,7 @@ export interface AiUiTestReport {
   endTime: string;
   durationMs: number;
   screenshots: string[];
+  rounds?: PlanRound[];
 }
 
 export interface LLMProvider {

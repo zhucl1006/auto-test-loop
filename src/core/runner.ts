@@ -285,6 +285,7 @@ export class AiUiAutomationRunner {
     const plannedAssertions: AiUiTestReport["plan"]["assertions"] = [];
     const summaries: string[] = [];
     const rawPlans: string[] = [];
+    const planRounds: NonNullable<AiUiTestReport["rounds"]> = [];
     let stepIndex = 1;
     let executed = 0;
     let halted = false;
@@ -295,15 +296,33 @@ export class AiUiAutomationRunner {
 
     while (executed < maxSteps && !halted && !complete && rounds < maxSteps) {
       const elements = await this.observer.captureInteractiveElements(page);
+      const modalOpen = Boolean(await this.observer.modalSignature(page));
       const history = toHistory(stepResults);
-      this.log("[规划] 第 " + (rounds + 1) + " 轮 · 进度 " + executed + "/" + maxSteps + " · " + page.url());
-      const plan = await this.planner.plan(goal, { url: page.url(), elements }, {
+      const roundNumber = rounds + 1;
+      this.log("[规划] 第 " + roundNumber + " 轮 · 进度 " + executed + "/" + maxSteps + " · " + page.url() + (modalOpen ? " · 模态窗口" : ""));
+      const plan = await this.planner.plan(goal, { url: page.url(), elements, modalOpen }, {
         scope: "next-page",
         history,
       });
       rounds += 1;
+      planRounds.push({
+        round: roundNumber,
+        url: page.url(),
+        summary: plan.summary || "",
+        steps: plan.steps || [],
+        assertions: plan.assertions || [],
+        complete: Boolean(plan.complete),
+        modalOpen,
+      });
       if (plan.summary) summaries.push(plan.summary);
       if (plan.rawPlanText) rawPlans.push(plan.rawPlanText);
+      this.log("   意图: " + (plan.summary || "未命名"));
+      for (const planned of plan.steps || []) {
+        this.log("   步骤: " + planned.intent + " · " + planned.semanticTarget + " · " + planned.description);
+      }
+      for (const assertion of plan.assertions || []) {
+        this.log("   断言: " + assertion.description + " · " + assertion.type + " · " + assertion.expected);
+      }
       this.log("   本批 " + plan.steps.length + " 步，" + plan.assertions.length + " 条断言" + (plan.complete ? "，规划器判断目标已完成" : ""));
 
       if (plan.complete || plan.steps.length === 0) {
@@ -328,7 +347,10 @@ export class AiUiAutomationRunner {
       previousSignature = signature;
 
       const pageAtStart = pageKey(page.url());
+      const surfaceBefore = await this.observer.modalSignature(page);
       let enteredNewPage = false;
+      let enteredModal = false;
+      const clickedTargets: string[] = [];
       for (const step of plan.steps.slice(0, Math.min(4, maxSteps - executed))) {
         plannedSteps.push(step);
         this.log("[执行] " + stepIndex + "/" + maxSteps + " · " + step.description);
@@ -366,8 +388,16 @@ export class AiUiAutomationRunner {
           break;
         }
         this.log("   ✅ 步骤执行成功 (" + execResult.durationMs + "ms)");
+        if (step.intent === "click" && step.semanticTarget) clickedTargets.push(step.semanticTarget);
         if (pageKey(execResult.urlAfter) !== pageAtStart) {
           enteredNewPage = true;
+          break;
+        }
+        if (page.waitForTimeout) await page.waitForTimeout(500);
+        const surfaceAfter = await this.observer.modalSignature(page);
+        if (surfaceAfter && surfaceAfter !== surfaceBefore) {
+          enteredModal = true;
+          this.log("[验收] 打开模态窗口，改为规划弹窗内操作");
           break;
         }
       }
@@ -393,9 +423,28 @@ export class AiUiAutomationRunner {
         continue;
       }
 
+      if (enteredModal) {
+        const visibleAfter = await this.observer.captureInteractiveElements(page);
+        const checked = plan.assertions.length
+          ? await this.verifier.verifyAll(page, plan.assertions, visibleAfter)
+          : { allPassed: true, results: [] as AiUiTestReport["assertionResults"] };
+        assertionResults.push(...noteArrivalChecks(checked.results, page.url() + "#modal"));
+        plannedAssertions.push(...plan.assertions);
+        continue;
+      }
+
       if (plan.assertions.length) {
         const visibleAfter = await this.observer.captureInteractiveElements(page);
         const checked = await this.verifier.verifyAll(page, plan.assertions, visibleAfter);
+        const staleClick = checked.results.filter((item) => !item.passed).every((item) =>
+          clickedTargets.some((target) => ((item.expected || "") + (item.description || "") + (item.message || "")).includes(target)),
+        );
+        if (!checked.allPassed && staleClick && clickedTargets.length) {
+          assertionResults.push(...noteArrivalChecks(checked.results, page.url()));
+          plannedAssertions.push(...plan.assertions);
+          this.log("[验收] 点击后地址未变，触发控件的旧检查不再阻断，继续规划");
+          continue;
+        }
         assertionResults.push(...checked.results);
         plannedAssertions.push(...plan.assertions);
         if (!checked.allPassed) halted = true;
@@ -444,6 +493,7 @@ export class AiUiAutomationRunner {
       endTime: new Date().toISOString(),
       durationMs: Date.now() - startTimestamp,
       screenshots,
+      rounds: planRounds,
     };
     this.writeReports(report);
     return report;

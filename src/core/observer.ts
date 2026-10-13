@@ -18,6 +18,25 @@ export class PageObserver {
   /**
    * 从当前页面提取可交互元素并修剪为 ElementSnapshot 列表
    */
+  async modalSignature(page: PageLike): Promise<string> {
+    try {
+      const value = await page.evaluate(() => {
+        const nodes = Array.from(document.querySelectorAll('[role="dialog"], [aria-modal="true"]'));
+        return nodes
+          .filter((node) => {
+            const style = window.getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+          })
+          .map((node) => node.getAttribute("data-testid") || node.getAttribute("aria-label") || "dialog")
+          .join("|");
+      });
+      return typeof value === "string" ? value : "";
+    } catch {
+      return "";
+    }
+  }
+
   async captureInteractiveElements(page: PageLike): Promise<ElementSnapshot[]> {
     try {
       const rawElements = await page.evaluate(() => {

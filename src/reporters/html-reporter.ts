@@ -18,6 +18,21 @@ function escapeHtml(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
 }
 
+function renderRounds(rounds: NonNullable<AiUiTestReport["rounds"]>): string {
+  if (!rounds.length) return `<p class="round-meta">这次运行没有分轮规划。</p>`;
+  return rounds.map((round) => `
+    <article class="round-card">
+      <h3>第 ${round.round} 轮${round.complete ? " · 判断目标已完成" : ""}${round.modalOpen ? " · 模态窗口" : ""}</h3>
+      <div class="round-meta">${escapeHtml(round.url)}</div>
+      <p><strong>意图：</strong>${escapeHtml(round.summary || "未命名")}</p>
+      <ul>
+        ${round.steps.map((step) => `<li>步骤：${escapeHtml(step.intent)} · ${escapeHtml(step.semanticTarget)} · ${escapeHtml(step.description)}</li>`).join("")}
+        ${round.assertions.map((item) => `<li>断言：${escapeHtml(item.description)} · ${escapeHtml(item.type)} · ${escapeHtml(item.expected)}</li>`).join("")}
+        ${!round.steps.length && !round.assertions.length ? "<li>没有新的步骤或断言</li>" : ""}
+      </ul>
+    </article>`).join("");
+}
+
 function screenshotButton(src: string, name: string): string {
   return `
             <div class="screenshot-box">
@@ -127,6 +142,10 @@ export class HtmlReporter {
     .status-badge { font-size: 1.25rem; font-weight: 700; color: #fff; padding: 8px 18px; border-radius: 9999px; background: ${statusBadgeColor}; }
     .meta-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 16px; font-size: 0.9rem; color: #64748b; }
     .section-title { font-size: 1.2rem; font-weight: 600; margin: 24px 0 12px; color: #0f172a; }
+    .round-card { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; }
+    .round-card h3 { margin: 0 0 6px; font-size: 1rem; }
+    .round-card ul { margin: 6px 0 0; padding-left: 18px; }
+    .round-meta { color: #64748b; font-size: 0.85rem; }
     .step-card { background: #fff; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 12px; overflow: hidden; }
     .step-card.failed { border-left: 4px solid #ef4444; }
     .step-card.success { border-left: 4px solid #10b981; }
@@ -187,6 +206,11 @@ export class HtmlReporter {
     <div class="section-title">🚦 验证断言 (Step 04)</div>
     <div class="assertions-container">
       ${assertionsHtml}
+    </div>
+
+    <div class="section-title">🗺️ 规划轮次</div>
+    <div class="rounds-container">
+      ${renderRounds(report.rounds || [])}
     </div>
 
     <div class="section-title">🪜 操作执行流</div>

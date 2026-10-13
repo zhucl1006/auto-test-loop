@@ -168,4 +168,61 @@ describe("autonomous continuation", () => {
     expect(currentUrl).toBe("https://example.test/app/campaigns")
     expect(report.assertionResults.some((item) => item.message?.includes("不中断后续覆盖"))).toBe(true)
   })
+
+  it("点击后打开模态窗口且地址不变时，继续规划而不是停止", async () => {
+    let currentUrl = "https://example.test/templates"
+    let opened = false
+    const calls: string[] = []
+    const provider: LLMProvider = {
+      name: "modal",
+      async generateText() { return "" },
+      async generateJson<T>(prompt: string): Promise<T> {
+        calls.push(prompt)
+        if (prompt.includes("Dialog open: yes") || calls.length > 1) {
+          return { summary: "关闭新建范本弹窗", complete: true, steps: [], assertions: [] } as T
+        }
+        return {
+          summary: "点击新建范本",
+          complete: false,
+          steps: [{ stepIndex: 1, description: "点击新建范本按钮", intent: "click", semanticTarget: "新建範本" }],
+          assertions: [{ assertionId: "opened", description: "确认触发新建范本操作", type: "element_visible", expected: "新建範本" }],
+        } as T
+      },
+    }
+    const page: any = {
+      url: () => currentUrl,
+      goto: async () => {},
+      click: async () => { opened = true },
+      fill: async () => {},
+      hover: async () => {},
+      press: async () => {},
+      waitForTimeout: async () => {},
+      waitForLoadState: async () => {},
+      screenshot: async () => Buffer.from("png"),
+      on: () => {},
+      locator: () => ({ first: () => ({ isVisible: async () => false }) }),
+      evaluate: async () => opened
+        ? "create-template-dialog"
+        : [{ targetId: 1, tagName: "button", text: "新建範本", testId: "template-list-page-header-btn-create", selector: '[data-testid="template-list-page-header-btn-create"]', isVisible: true, isEnabled: true }],
+    }
+    const reportDir = fs.mkdtempSync(path.join(os.tmpdir(), "atl-modal-"))
+    const report = await new AiUiAutomationRunner({
+      llmProvider: provider,
+      autonomous: true,
+      verbose: false,
+      reportDir,
+    }).runTest({
+      id: "modal_1",
+      name: "模态窗口",
+      description: "测试新建范本弹窗",
+      targetUrl: "https://example.test/templates",
+      maxSteps: 4,
+    }, page)
+    const html = fs.readFileSync(path.join(reportDir, "report-modal_1.html"), "utf8")
+    fs.rmSync(reportDir, { recursive: true, force: true })
+    expect(report.overallStatus).toBe("PASS")
+    expect(report.rounds?.length).toBeGreaterThanOrEqual(2)
+    expect(html).toContain("第 1 轮")
+    expect(html).toContain("点击新建范本")
+  })
 })

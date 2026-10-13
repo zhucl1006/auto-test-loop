@@ -31,6 +31,7 @@ export interface PlanRequest {
 
 export interface PageContext {
   url: string;
+  modalOpen?: boolean;
   elements: {
     targetId: number;
     tagName: string;
@@ -85,7 +86,8 @@ ${request?.scope === "next-page" ? `
 11. Never use element_visible with expected "body". Do not invent a destination URL from a testid, label, or hyphenated slug. url_contains may only use a URL already present in the current page or completed steps. Otherwise assert text already visible, or omit the URL assertion.
 12. Set complete to false while goal work remains.
 13. If the goal asks to cover every sidebar or navigation item, complete is true only after every visible navigation link has been clicked in the completed steps. Do not treat a group heading as a link, and do not skip a visible nav link.
-14. Do not assert that the control you are about to click will remain visible after the URL changes.` : ""}
+14. Do not assert that the control you are about to click will remain visible after the URL changes.
+15. If a dialog is open, plan only inside that dialog: fill visible fields when needed, then close or cancel it. Do not click the page behind the dialog, and do not mark the goal complete merely because a dialog opened.` : ""}
 
 Return a JSON object conforming to this schema:
 {
@@ -133,6 +135,7 @@ Test Name: ${goal.name}
 Test Description: ${goal.description}
 Target URL: ${goal.targetUrl}
 Current URL: ${pageContext?.url || "not opened yet"}
+Dialog open: ${pageContext?.modalOpen ? "yes" : "no"}
 Initial Context: ${JSON.stringify(goal.initialContext || {})}
 Observed elements:
 ${observed || "none"}
