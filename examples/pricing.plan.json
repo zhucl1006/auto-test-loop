@@ -1,0 +1,36 @@
+{
+  "id": "pricing-free-plan",
+  "name": "定价页免费方案",
+  "description": "按固定步骤检查定价页，不让模型改写计划",
+  "targetUrl": "https://example.com/pricing",
+  "plannedSteps": [
+    {
+      "stepIndex": 1,
+      "description": "打开定价页",
+      "intent": "navigate",
+      "semanticTarget": "page",
+      "value": "https://example.com/pricing"
+    },
+    {
+      "stepIndex": 2,
+      "description": "确认购买入口",
+      "intent": "click",
+      "semanticTarget": "购买按钮",
+      "optional": true
+    }
+  ],
+  "expectedAssertions": [
+    {
+      "assertionId": "pricing-url",
+      "description": "停留在定价页",
+      "type": "url_contains",
+      "expected": "/pricing"
+    },
+    {
+      "assertionId": "free-plan",
+      "description": "免费方案可见",
+      "type": "text_visible",
+      "expected": "Free"
+    }
+  ]
+}

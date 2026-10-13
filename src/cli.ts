@@ -14,7 +14,7 @@ import { extractGoalContext, goalNeedsCredentials, redactSecrets } from "./core/
 import { runAiUiTest } from "./core/runner.js"
 import { createAutoLLMProvider } from "./llm/provider.js"
 import { ensureChromium } from "./runtime/browser.js"
-import { TestGoal } from "./types/index.js"
+import { goalFromPlan, loadPlanFile } from "./runtime/plan-file.js"
 
 function readArg(args: string[], name: string): string | undefined {
   const index = args.indexOf(name)
@@ -22,7 +22,7 @@ function readArg(args: string[], name: string): string | undefined {
 }
 
 function readCommand(args: string[]): string | undefined {
-  const valued = new Set(["--goal", "--url", "--report-dir", "--screenshot-dir"])
+  const valued = new Set(["--goal", "--url", "--report-dir", "--screenshot-dir", "--plan", "--mode"])
   for (let index = 0; index < args.length; index += 1) {
     if (valued.has(args[index])) {
       index += 1
@@ -43,6 +43,9 @@ function printHelp(): void {
 参数:
   --goal           自然语言目标。账密写在这句话里，只用于本次运行，不会保存。
   --url            起始地址
+  --mode auto      自动模式，默认。由模型或规则建立计划。
+  --mode plan      计划模式，必须配合 --plan。
+  --plan <file>    计划 JSON。有 plannedSteps 时不会改写步骤。
   --headed         显示浏览器
   --report-dir     报告目录
   --screenshot-dir 截图目录
@@ -108,9 +111,14 @@ async function main() {
     return
   }
 
+  const mode = readArg(args, "--mode")
+  const planPath = readArg(args, "--plan")
+  if (mode && mode !== "auto" && mode !== "plan") throw new Error("--mode 只能是 auto 或 plan")
+  const planMode = mode === "plan" || Boolean(planPath)
+  if (planMode && !planPath) throw new Error("计划模式需要 --plan 计划文件")
   const goalText = readArg(args, "--goal") || "打开页面，确认主要内容和关键操作入口可见"
   const url = readArg(args, "--url") || process.env.WEB_URL
-  if (!url) throw new Error("缺少 --url 或 WEB_URL")
+  if (!planMode && !url) throw new Error("缺少 --url 或 WEB_URL")
   const reportDir = readArg(args, "--report-dir") || "test/reports/auto"
   const screenshotDir = readArg(args, "--screenshot-dir") || "test/screenshots/auto"
   const headless = !args.includes("--headed")
@@ -125,28 +133,33 @@ async function main() {
   ]
   const llmProvider = createAutoLLMProvider()
 
+  const loadedPlan = planMode ? loadPlanFile(planPath!) : undefined
+  const goal = loadedPlan
+    ? goalFromPlan(loadedPlan, { url, description: goalText, context })
+    : {
+        id: "auto_" + Date.now(),
+        name: "自然语言自主测试",
+        description: goalText,
+        targetUrl: url!,
+        initialContext: context,
+        maxSteps: Number(process.env.AUTO_MAX_STEPS || "12"),
+      }
+
   console.log("AutoTestLoop")
-  console.log("目标: " + redactSecrets(goalText, secrets))
-  console.log("页面: " + url)
+  console.log("模式: " + (planMode ? "计划模式" : "自动模式"))
+  console.log("目标: " + redactSecrets(goal.description, secrets))
+  console.log("页面: " + goal.targetUrl)
   const contextSummary = describeContext(context)
   if (contextSummary) console.log("登录信息: " + contextSummary)
   console.log(describeSelection())
 
   ensureChromium()
-  const goal: TestGoal = {
-    id: "auto_" + Date.now(),
-    name: "自然语言自主测试",
-    description: goalText,
-    targetUrl: url,
-    initialContext: context,
-    maxSteps: Number(process.env.AUTO_MAX_STEPS || "12"),
-  }
   const browser = await chromium.launch({ headless })
   const page = await browser.newPage({ viewport: { width: 1440, height: 900 } })
   try {
     const report = await runAiUiTest(goal, page, {
       llmProvider,
-      autonomous: true,
+      autonomous: !planMode,
       screenshotDir,
       reportDir,
     })
