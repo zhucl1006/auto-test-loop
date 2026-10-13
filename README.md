@@ -242,7 +242,7 @@ pnpm run build
 
 ## 当前边界
 
-0.1.0 能完成计划、单步决策、执行、验收和一次自愈。它还不是每一步都重新规划的长程代理，也还没有发布到 npm。
+0.1.0 能完成计划、单步决策、执行、验收和一次自愈。它还不是每一步都重新规划的长程代理。
 
 - 自动模式的计划在开始时生成，执行中不会整份重写。
 - 自愈大多是等待后重新验收。
@@ -252,13 +252,13 @@ pnpm run build
 
 ## 发布到 npm
 
-包名 `auto-test-loop` 已经可以发布，但当前环境还没有登录 npm。登录并发布后，短命令会是：
+登录 npm 后，推送到 `main` 会自动发布尚未发布过的版本。发布完成后，任意目录可以执行：
 
 ```bash
 npx auto-test-loop --goal "打开定价页，确认有免费方案" --url "https://example.com/pricing"
 ```
 
-在那之前，请使用上面的 `github:zhucl1006/auto-test-loop` 命令。
+自动发布不会重复发布同一个 `version`。要发下一版，先修改 `package.json` 的 `version`，再推送到 `main`。在自动发布生效前，仍使用 `github:zhucl1006/auto-test-loop`。
 
 ## 许可
 
