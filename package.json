@@ -1,6 +1,6 @@
 {
   "name": "auto-test-loop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "AutoTestLoop is an AI autonomous testing loop. It observes, decides, executes, verifies, and heals.",
   "license": "MIT",

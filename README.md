@@ -4,7 +4,7 @@ AI 自主测试循环。你给出目标，它建立计划，再观察页面、�
 
 AutoTestLoop is an open-source loop for autonomous browser testing. It can plan from a sentence, or follow a plan you already wrote.
 
-**当前版本：0.1.0。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
+**当前版本：0.2.0。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
 
 ## 一次测试怎么走
 
@@ -243,7 +243,7 @@ pnpm run build
 
 ## 当前边界
 
-0.1.0 能完成计划、单步决策、执行、验收和一次自愈。它还不是每一步都重新规划的长程代理。
+0.2.0 能完成计划、单步决策、执行、验收、一次自愈，以及自动模式下按页面继续规划。它还不是把每个页面的全部按钮都测完的全量代理。
 
 - 自动模式会在 URL 变化后重新感知页面并规划下一批步骤，每进入一个页面验收一次，直到目标完成或达到步数上限。
 - 自愈大多是等待后重新验收。
@@ -253,7 +253,7 @@ pnpm run build
 
 ## 发布到 npm
 
-`auto-test-loop@0.1.0` 已发布。任意目录可以执行：
+`auto-test-loop@0.2.0` 推送到 main 后会发布。任意目录可以执行：
 
 ```bash
 npx auto-test-loop --goal "打开定价页，确认有免费方案" --url "https://example.com/pricing"
