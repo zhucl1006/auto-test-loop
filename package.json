@@ -1,12 +1,11 @@
 {
   "name": "auto-test-loop",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "AutoTestLoop is an AI autonomous testing loop. It observes, decides, executes, verifies, and heals.",
   "license": "MIT",
   "bin": {
-    "autotestloop": "./dist/cli.js"
+    "auto-test-loop": "./dist/cli.js"
   },
   "repository": {
     "type": "git",
@@ -43,14 +42,20 @@
     "aireach": "node targets/aireach/run-regression.mjs",
     "aireach:ui": "node targets/aireach/run-suite.mjs",
     "aireach:api": "node targets/aireach/api-functional.mjs",
-    "aireach:load": "node targets/aireach/load-regression.mjs"
+    "aireach:load": "node targets/aireach/load-regression.mjs",
+    "prepare": "tsc"
   },
   "dependencies": {
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "playwright": "1.49.0"
   },
   "devDependencies": {
-    "playwright": "1.49.0",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"
-  }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ]
 }

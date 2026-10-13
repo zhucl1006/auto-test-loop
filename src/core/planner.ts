@@ -149,7 +149,17 @@ ${observed || "none"}`;
     let currentStep = 2;
 
     // 场景 A: 登录场景 (包含登录/登入/login/账号/密码/验证码等关键词)
-    if (desc.includes("登录") || desc.includes("登入") || desc.includes("login")) {
+    if (
+      desc.includes("登录") ||
+      desc.includes("登入") ||
+      desc.includes("login") ||
+      desc.includes("sign in") ||
+      goal.initialContext?.email ||
+      goal.initialContext?.username ||
+      goal.initialContext?.password ||
+      goal.initialContext?.phone ||
+      goal.initialContext?.otp
+    ) {
       const isOtpFlow =
         desc.includes("手机") ||
         desc.includes("手機") ||
@@ -197,7 +207,7 @@ ${observed || "none"}`;
           description: "输入短信验证码",
           intent: "fill",
           semanticTarget: "验证码输入框",
-          value: password,
+          value: goal.initialContext?.otp || password,
         });
         steps.push({
           stepIndex: currentStep++,

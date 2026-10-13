@@ -119,4 +119,17 @@ describe("LlmPlanner (Step 01)", () => {
     expect(plan.assertions).toHaveLength(1);
     expect(plan.assertions[0].expected).toBe("/custom");
   });
+
+  it("短信登录使用目标中的验证码，而不是密码字段", async () => {
+    const planner = new LlmPlanner();
+    const plan = await planner.plan({
+      id: "otp_from_goal",
+      name: "短信登录",
+      description: "使用手机号登录",
+      targetUrl: "http://localhost/login",
+      initialContext: { phone: "13800138000", otp: "123456", password: "not-the-otp" },
+    });
+    const otpStep = plan.steps.find((step) => step.semanticTarget.includes("验证码输入"));
+    expect(otpStep?.value).toBe("123456");
+  });
 });

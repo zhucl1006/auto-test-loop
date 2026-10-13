@@ -4,7 +4,7 @@ AI 自主测试循环。你给出目标，它自己观察页面、决定下一�
 
 AutoTestLoop is an open-source loop for autonomous browser testing. Point it at any website from the command line.
 
-**当前版本：0.1.0。** 其他项目现在还不能通过 `npx` 或 `npm install` 一条命令使用。包尚未发布到 npm，Playwright 浏览器也不会随包自动安装。当前可用方式是克隆本仓库后构建。
+**当前版本：0.1.0。** 其他项目可以用一条 `npx` 命令运行。npm 短名称还没有发布，所以现在使用 GitHub 地址。第一次运行会询问模型密钥并安装 Chromium，之后不再询问。
 
 ## English quick start
 
@@ -18,7 +18,7 @@ pnpm run build
 pnpm run auto -- --goal "Open the pricing page and confirm a free plan is visible" --url "https://example.com/pricing"
 ```
 
-This is the working path today. `npx auto-test-loop` is the intended one-command entry, but it does not work until the package is published.
+Contributors can clone and build as shown above. Other projects can run one command without cloning; see below.
 
 A model key is optional. Without one, AutoTestLoop uses a local ranker. With `TYPESAFE_API_KEY`, Jev chooses the element. With `GEMINI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`, a model plans the flow and diagnoses failures.
 
@@ -88,29 +88,27 @@ pnpm run auto -- --goal "打开定价页，确认有免费方案和购买按钮"
 
 ## 其他项目如何使用
 
-其他项目不需要把代码放进本仓库，也不需要修改框架。
-
-现在还做不到下面这一条：
+其他项目不需要把代码放进本仓库。在任意目录执行：
 
 ```bash
-npx auto-test-loop --goal "确认首页有登录入口" --url "https://your-app.example"
+npx --yes github:zhucl1006/auto-test-loop --goal "打开定价页，确认有免费方案" --url "https://example.com/pricing"
 ```
 
-原因有三个：
-
-- 包标记为 `private`，还没有发布到 npm，所以 `npx` 和 `npm install` 都找不到它。
-- 可执行入口在构建后的 `dist/`，而 `dist/` 不会提交。只克隆仓库不能直接运行。
-- Playwright 目前是开发依赖。即使安装了包，Chromium 也不会自动准备好。
-
-因此，其他项目当前要克隆本仓库、安装依赖、安装浏览器并构建，然后执行：
+需要登录时，把账号写进这句话。它只用于这一次运行，不会写入配置：
 
 ```bash
-pnpm run auto -- --goal "确认首页有登录入口" --url "https://your-app.example"
+npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密码 secret123 登录，并确认进入控制台" --url "https://your-app.example/login"
 ```
 
-模型密钥不能写进这一条命令，也不能提交到仓库。需要时放在运行环境的变量里。
+也可以写手机号和验证码，例如 `用手机号 13800138000、验证码 654321 登录`。
 
-发布到 npm 之后，任意目录才可以使用 `npx auto-test-loop`。第一次运行仍要能下载 Chromium，否则一条命令会在打开浏览器时失败。
+第一次运行会询问模型密钥。直接回车可以跳过。已输入的密钥保存在 `~/.config/auto-test-loop/env`，文件权限只有当前用户可读，下次不再询问。重新输入使用 `--configure`。CI 或不想询问时加 `--no-prompt`。
+
+如果目标明显需要登录，但这句话里没有识别到密码或验证码，运行时会再问一次。这次输入的账密不会保存。
+
+首次运行还会安装 Chromium。终端会隐藏目标里的密码。HTML 报告同样隐藏密码和验证码；JSON 报告保留原始值，供本机排查，不要提交或外传。
+
+`npx auto-test-loop` 这个短命令要等包发布到 npm 之后才能用。当前 npm 账号尚未登录，所以公开可用的一条命令是上面的 GitHub 地址。
 
 稳定回归优先写显式步骤：
 
@@ -148,7 +146,7 @@ export const goal = {
 
 `plannedSteps` 存在时，规划器必须原样执行，不会被模型改写。`semanticTarget` 可以使用 `testid:` 或 `selector:` 前缀。
 
-包发布后，其他项目可以安装 `auto-test-loop`，再在自己的脚本里调用。当前还不能 `npm install auto-test-loop`，只能在本仓库构建后这样调用：
+在本仓库构建后，也可以在脚本里调用：
 
 ```js
 import { chromium } from "playwright";

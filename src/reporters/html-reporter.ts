@@ -10,7 +10,16 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import { AiUiTestReport } from "../types/index.js";
+import { redactSecrets } from "../core/goal-context.js";
+import { AiUiTestReport, StepExecutionResult } from "../types/index.js";
+
+function displayInput(step: StepExecutionResult, secrets: Array<string | undefined>): string {
+  const target = (step.plannedStep?.semanticTarget || "") + " " + (step.plannedStep?.description || "");
+  if (step.action.action === "fill" && /密码|密碼|password|pwd|验证码|驗證碼|otp/i.test(target)) {
+    return "******";
+  }
+  return redactSecrets(step.action.value || "", secrets);
+}
 
 export class HtmlReporter {
   static generate(report: AiUiTestReport, outputDir: string): string {
@@ -18,6 +27,10 @@ export class HtmlReporter {
       fs.mkdirSync(outputDir, { recursive: true });
     }
 
+    const secretValues = [
+      report.goal.initialContext?.password,
+      report.goal.initialContext?.otp,
+    ];
     const statusBadgeColor =
       report.overallStatus === "PASS"
         ? "#10b981"
@@ -56,7 +69,7 @@ export class HtmlReporter {
             <p><strong>操作意图：</strong>${step.plannedStep?.description || step.action.reasoning}</p>
             <p><strong>决策原因 (Jev)：</strong>${step.action.reasoning} (置信度: ${(step.action.confidence * 100).toFixed(0)}%)</p>
             ${step.action.selector ? `<p><strong>选择器：</strong><code>${step.action.selector}</code></p>` : ""}
-            ${step.action.value ? `<p><strong>输入载荷：</strong><code>${step.action.value}</code></p>` : ""}
+            ${step.action.value ? `<p><strong>输入载荷：</strong><code>${displayInput(step, secretValues)}</code></p>` : ""}
             ${step.error ? `<div class="error-box"><strong>执行异常：</strong>${step.error}</div>` : ""}
             ${imageTag}
           </div>
@@ -136,7 +149,7 @@ export class HtmlReporter {
     <div class="header">
       <div>
         <h1 style="margin: 0; font-size: 1.5rem;">${report.goal.name}</h1>
-        <p style="margin: 6px 0 0; color: #64748b;">${report.goal.description}</p>
+        <p style="margin: 6px 0 0; color: #64748b;">${redactSecrets(report.goal.description, secretValues)}</p>
         <div class="meta-grid">
           <div>目标地址: <code>${report.goal.targetUrl}</code></div>
           <div>总耗时: <strong>${report.durationMs}ms</strong></div>
