@@ -2,9 +2,9 @@
 
 AI 自主测试循环。你给出目标，它自己观察页面、决定下一步、执行、验收；失败后诊断，能自愈就再走一轮。
 
-AutoTestLoop is an open-source loop for autonomous browser testing. It does not contain a business application. Point it at any website, or connect your own project through `targets/<name>`.
+AutoTestLoop is an open-source loop for autonomous browser testing. Point it at any website from the command line.
 
-**当前版本：0.1.0。** 现在可以用它做目标驱动的页面检查和显式回归。它还不是通用的自主开发运行时，也还没有发布到 npm。安装方式是克隆仓库后构建。
+**当前版本：0.1.0。** 其他项目现在还不能通过 `npx` 或 `npm install` 一条命令使用。包尚未发布到 npm，Playwright 浏览器也不会随包自动安装。当前可用方式是克隆本仓库后构建。
 
 ## English quick start
 
@@ -17,6 +17,8 @@ cp .env.example .env
 pnpm run build
 pnpm run auto -- --goal "Open the pricing page and confirm a free plan is visible" --url "https://example.com/pricing"
 ```
+
+This is the working path today. `npx auto-test-loop` is the intended one-command entry, but it does not work until the package is published.
 
 A model key is optional. Without one, AutoTestLoop uses a local ranker. With `TYPESAFE_API_KEY`, Jev chooses the element. With `GEMINI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`, a model plans the flow and diagnoses failures.
 
@@ -84,9 +86,31 @@ pnpm run auto -- --goal "打开定价页，确认有免费方案和购买按钮"
 
 `AUTO_MAX_STEPS` 控制自主模式最多执行多少步，默认 12。
 
-## 接到你的项目
+## 其他项目如何使用
 
-不要把业务选择器写进框架核心。为每个项目建一个 `targets/<name>`，在那里放地址、场景和账号读取逻辑。`targets/aireach` 是一个示例，不是运行任意项目的前提。
+其他项目不需要把代码放进本仓库，也不需要修改框架。
+
+现在还做不到下面这一条：
+
+```bash
+npx auto-test-loop --goal "确认首页有登录入口" --url "https://your-app.example"
+```
+
+原因有三个：
+
+- 包标记为 `private`，还没有发布到 npm，所以 `npx` 和 `npm install` 都找不到它。
+- 可执行入口在构建后的 `dist/`，而 `dist/` 不会提交。只克隆仓库不能直接运行。
+- Playwright 目前是开发依赖。即使安装了包，Chromium 也不会自动准备好。
+
+因此，其他项目当前要克隆本仓库、安装依赖、安装浏览器并构建，然后执行：
+
+```bash
+pnpm run auto -- --goal "确认首页有登录入口" --url "https://your-app.example"
+```
+
+模型密钥不能写进这一条命令，也不能提交到仓库。需要时放在运行环境的变量里。
+
+发布到 npm 之后，任意目录才可以使用 `npx auto-test-loop`。第一次运行仍要能下载 Chromium，否则一条命令会在打开浏览器时失败。
 
 稳定回归优先写显式步骤：
 
@@ -124,7 +148,7 @@ export const goal = {
 
 `plannedSteps` 存在时，规划器必须原样执行，不会被模型改写。`semanticTarget` 可以使用 `testid:` 或 `selector:` 前缀。
 
-构建后可以在自己的脚本里调用：
+包发布后，其他项目可以安装 `auto-test-loop`，再在自己的脚本里调用。当前还不能 `npm install auto-test-loop`，只能在本仓库构建后这样调用：
 
 ```js
 import { chromium } from "playwright";
@@ -163,8 +187,6 @@ cp .env.example .env
 | `TEST_EMAIL` / `TEST_USERNAME` / `TEST_PASSWORD` | 自主模式可注入的登录上下文 |
 | `AUTO_MAX_STEPS` | 自主模式步数上限 |
 
-示例项目还会读取 `BFF_URL`、`TEST_PHONE`、`TEST_OTP`、`TEST_TENANT_ID`、`TEST_AUTH_ENV`。这些值只属于本地 `.env`。
-
 ## 不会进入 Git 的内容
 
 以下内容已经忽略，请保持这样：
@@ -187,24 +209,13 @@ pnpm test
 pnpm run build
 ```
 
-示例项目的命令：
-
-```bash
-pnpm run aireach:api
-pnpm run aireach:ui
-pnpm run aireach
-pnpm run aireach:load
-```
-
-这些命令依赖本机已经启动的 AiReach 服务，并且需要你自己在 `.env` 中提供账号。没有账号时，登录步骤会停止，不会使用仓库内的默认账号。
-
 ## 当前边界
 
 0.1.0 已经能跑通目标、决策、执行、验收和一次自愈。下面这些还没有做成通用能力：
 
 - 执行中不会按新的页面状态重新规划，计划在开始时生成。
 - 自愈大多是等待后重新验收，不会真正换一个新的定位策略再试。
-- 无模型时的规则仍带有登录、标签和活动等示例偏向。
+- 无模型时的规则仍带有一些具体页面的登录和表单偏向，还不是完全通用的匹配器。
 - `select`、`scroll`、上传、拖拽、多标签页和 iframe 还没有完整执行器。
 - 截图视觉分析还没有接进决策闭环。
 - 报告会记录输入值，还没有自动脱敏。
