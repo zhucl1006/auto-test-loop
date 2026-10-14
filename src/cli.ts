@@ -37,25 +37,41 @@ function readCommand(args: string[]): string | undefined {
 function printHelp(): void {
   console.log(`AutoTestLoop
 
+用一句话检查网页，或按写好的计划回归。账密只写在本次目标里，不会保存。
+
 用法:
+  npx --yes github:zhucl1006/auto-test-loop help
   npx --yes github:zhucl1006/auto-test-loop config
-  npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密码 secret 登录" --url "https://example.com/login"
+  npx --yes github:zhucl1006/auto-test-loop --goal "用邮箱 qa@example.com、密码 secret 登录，并确认进入控制台" --url "https://example.com/login"
+
+命令:
+  help             显示这份使用说明
+  config           选择模型并保存对应的 key，之后可重复调整
 
 参数:
-  --goal           自然语言目标。账密写在这句话里，只用于本次运行，不会保存。
-  --url            起始地址
+  --goal           自然语言目标。账密写在这句话里，只用于本次运行。
+  --url            起始地址。省略时读取 WEB_URL。
   --mode auto      自动模式，默认。由模型或规则建立计划。
   --mode plan      计划模式，必须配合 --plan。
   --plan <file>    计划 JSON。有 plannedSteps 时不会改写步骤。
   --headed         显示浏览器
-  --report-dir     报告目录
-  --screenshot-dir 截图目录
-  --report-lang    本次运行的报告语言，默认简体中文。例如 zh-CN、zh-TW、en
-  --max-steps      本次运行的步数上限，覆盖 config 和项目 .env
-  config           选择模型并保存对应的 key，之后可重复调整
-  --configure      同 config，调整后继续执行本次目标
+  --report-dir     报告目录，默认 test/reports/auto
+  --screenshot-dir 截图目录，默认 test/screenshots/auto
+  --report-lang    本次报告语言，默认简体中文。例如 zh-CN、zh-TW、en
+  --max-steps      本次步数上限，覆盖 config 和项目 .env
+  --configure      先调整配置，再执行本次目标
   --no-prompt      不询问，适合 CI
-  --help           显示帮助
+  --help, -h       显示这份使用说明
+
+目标写法:
+  确认页面:     打开定价页，确认有免费方案和购买按钮
+  点遍导航:     登录后，每个可见导航都要点进一次。还有未点的导航时禁止结束。
+  自己发现并建立: 自己列出新建、导入、录入按钮，填写必填项后点保存。禁止取消和 Escape。
+  路径必须固定: 改用 --mode plan --plan 计划.json
+
+模型:
+  单步决策用 Jev 或本地规则。规划与诊断可用 Gemini、OpenAI、DeepSeek、Ollama 或本地规则。
+  Ollama 默认连接 http://127.0.0.1:11434/v1，模型名默认 qwen2.5，需先 ollama pull。
 `)
 }
 
@@ -95,12 +111,11 @@ function describeContext(context: Record<string, string>): string {
 async function main() {
   dotenv.config()
   const args = process.argv.slice(2)
-  if (args.includes("--help") || args.includes("-h")) {
+  const command = readCommand(args)
+  if (command === "help" || args.includes("--help") || args.includes("-h")) {
     printHelp()
     return
   }
-
-  const command = readCommand(args)
   const configuring = command === "config" || command === "configure" || args.includes("--configure")
   const interactive = !args.includes("--no-prompt") && Boolean(process.stdin.isTTY && process.stdout.isTTY)
   if (configuring && !interactive) throw new Error("config 需要在交互终端中运行")

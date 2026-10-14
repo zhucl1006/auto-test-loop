@@ -4,7 +4,7 @@ AI 自主测试循环。你给出目标，它建立计划，再观察页面、�
 
 AutoTestLoop is an open-source loop for autonomous browser testing. It can plan from a sentence, or follow a plan you already wrote.
 
-**当前版本：0.2.1。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
+**当前版本：0.2.2。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
 
 ## 一次测试怎么走
 
@@ -74,6 +74,12 @@ flowchart TD
 HTML 和 JSON 报告写到 `test/reports/auto/`。HTML 会隐藏密码和验证码。JSON 保留原始值，只供本机排查，不要提交或外传。
 
 调用 Jev 或 LLM 后，终端会立刻打印本次和累计 token。数量来自接口返回的用量；接口没有返回时会标明，不会自行估算。结束时再打印合计，HTML 报告页眉也会显示。
+
+查看使用说明：
+
+```bash
+npx --yes auto-test-loop help
+```
 
 ## 自动模式
 
@@ -286,7 +292,7 @@ pnpm run build
 
 ## 当前边界
 
-0.2.1 能完成计划、单步决策、执行、验收、一次自愈，以及自动模式下按页面继续规划。它还不是把每个页面的全部按钮都测完的全量代理。
+0.2.2 能完成计划、单步决策、执行、验收、一次自愈，以及自动模式下按页面继续规划。它还不是把每个页面的全部按钮都测完的全量代理。
 
 - 自动模式会在 URL 变化后重新感知页面并规划下一批步骤，每进入一个页面验收一次，直到目标完成或达到步数上限。
 - 自愈大多是等待后重新验收。
@@ -296,7 +302,7 @@ pnpm run build
 
 ## 发布到 npm
 
-`auto-test-loop@0.2.1` 推送到 main 后会发布。任意目录可以执行：
+`auto-test-loop@0.2.2` 推送到 main 后会发布。任意目录可以执行：
 
 ```bash
 npx auto-test-loop --goal "打开定价页，确认有免费方案" --url "https://example.com/pricing"
