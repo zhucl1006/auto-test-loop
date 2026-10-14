@@ -77,6 +77,25 @@ describe("model config", () => {
     fs.rmSync(path.dirname(configPath), { recursive: true, force: true })
   })
 
+  it("选择 Ollama 时不要求云端 key", async () => {
+    for (const key of CONFIG_KEYS) delete process.env[key]
+    const configPath = tempConfig()
+    const answers = ["2", "4", "", ""]
+    await ensureUserEnv({
+      interactive: true,
+      configPath,
+      ask: async () => answers.shift() || "",
+    })
+    const saved = fs.readFileSync(configPath, "utf8")
+    expect(saved).toContain("AUTOTESTLOOP_ANALYSIS=ollama")
+    expect(saved).toContain("OLLAMA_BASE_URL=http://127.0.0.1:11434/v1")
+    expect(saved).toContain("OLLAMA_MODEL=qwen2.5")
+    expect(saved).not.toContain("OLLAMA_API_KEY=")
+    expect(createAutoLLMProvider()?.name).toContain("qwen2.5")
+    expect(describeSelection()).toContain("Ollama")
+    fs.rmSync(path.dirname(configPath), { recursive: true, force: true })
+  })
+
   it("无法识别的序号回退到推荐项", () => {
     expect(parseChoice("nope", [{ id: "jev", aliases: ["1", "jev"] }], "jev")).toBe("jev")
     expect(parseChoice("3", [{ id: "deepseek", aliases: ["3", "deepseek"] }], "gemini")).toBe("deepseek")

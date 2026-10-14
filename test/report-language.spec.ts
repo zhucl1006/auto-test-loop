@@ -43,7 +43,7 @@ describe("report language", () => {
     })
     expect(fs.readFileSync(configPath, "utf8")).toContain("AUTOTESTLOOP_REPORT_LANG=zh-CN")
 
-    const answers = ["2", "4", "en"]
+    const answers = ["2", "5", "en"]
     await ensureUserEnv({
       force: true,
       interactive: true,

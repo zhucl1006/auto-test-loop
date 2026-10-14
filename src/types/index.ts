@@ -151,6 +151,14 @@ export interface AiUiTestReport {
   durationMs: number;
   screenshots: string[];
   rounds?: PlanRound[];
+  tokenUsage?: {
+    input: number;
+    output: number;
+    total: number;
+    calls: number;
+    unreported: number;
+    bySource: { source: string; calls: number; input: number; output: number; total: number; unreported: number }[];
+  };
 }
 
 export interface LLMProvider {

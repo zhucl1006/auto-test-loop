@@ -6,6 +6,7 @@
 import { ActionDecision, ElementSnapshot, PlannedStep } from "../types/index.js";
 
 import { resolveDecision } from "../config/selection.js";
+import { recordTokenPayload } from "./token-usage.js";
 
 const JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
 
@@ -86,6 +87,7 @@ export async function chooseElementWithJev(
   const payload = (await response.json()) as {
     answers?: { target?: JevChoiceAnswer };
   };
+  recordTokenPayload("Jev", jevModel(), payload);
   const answer = payload.answers?.target;
   if (!answer || answer.choice === "none" || answer.confidence < jevMinConfidence()) return null;
 

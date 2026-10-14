@@ -13,6 +13,7 @@ import { AssertionVerifier } from "./verifier.js";
 import { LlmHealer } from "./healer.js";
 import { HtmlReporter } from "../reporters/html-reporter.js";
 import { JsonReporter } from "../reporters/json-reporter.js";
+import { formatTokenSummary, resetTokenUsage, snapshotTokenUsage } from "../llm/token-usage.js";
 import {
   AiUiTestReport,
   FailureContext,
@@ -61,6 +62,7 @@ export class AiUiAutomationRunner {
   }
 
   async runTest(goal: TestGoal, page: PlaywrightPage): Promise<AiUiTestReport> {
+    resetTokenUsage();
     const startTime = new Date().toISOString();
     const startTimestamp = Date.now();
     const stepResults: StepExecutionResult[] = [];
@@ -249,6 +251,8 @@ export class AiUiAutomationRunner {
     try {
       if (this.options.reportDir) {
         const jsonPath = JsonReporter.generate(finalReport, this.options.reportDir);
+        finalReport.tokenUsage = snapshotTokenUsage();
+        this.log(formatTokenSummary(finalReport.tokenUsage));
         const htmlPath = HtmlReporter.generate(finalReport, this.options.reportDir);
         this.log(`📊 测试报告已生成:`);
         this.log(`   - HTML: ${htmlPath}`);
@@ -533,6 +537,8 @@ export class AiUiAutomationRunner {
   }
 
   private writeReports(report: AiUiTestReport): void {
+    report.tokenUsage = snapshotTokenUsage();
+    this.log(formatTokenSummary(report.tokenUsage));
     try {
       if (!this.options.reportDir) return;
       const jsonPath = JsonReporter.generate(report, this.options.reportDir);

@@ -11,6 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { resolveReportLanguage } from "../config/report-language.js";
+import { formatTokenCount } from "../llm/token-usage.js";
 import { redactSecrets } from "../core/goal-context.js";
 import { AiUiTestReport, StepExecutionResult } from "../types/index.js";
 
@@ -194,6 +195,7 @@ export class HtmlReporter {
           <div>总耗时: <strong>${report.durationMs}ms</strong></div>
           <div>开始时间: ${report.startTime}</div>
           <div>报告语言: <strong>${escapeHtml(resolveReportLanguage().label)}</strong></div>
+          ${report.tokenUsage ? `<div>Token: <strong>合计 ${formatTokenCount(report.tokenUsage.total)}</strong>（输入 ${formatTokenCount(report.tokenUsage.input)} · 输出 ${formatTokenCount(report.tokenUsage.output)}）</div>` : ""}
         </div>
       </div>
       <div>

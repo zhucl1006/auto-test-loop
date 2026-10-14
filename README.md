@@ -4,7 +4,7 @@ AI 自主测试循环。你给出目标，它建立计划，再观察页面、�
 
 AutoTestLoop is an open-source loop for autonomous browser testing. It can plan from a sentence, or follow a plan you already wrote.
 
-**当前版本：0.2.0。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
+**当前版本：0.2.1。** 已发布到 npm，其他项目可以用 `npx auto-test-loop` 直接运行。
 
 ## 一次测试怎么走
 
@@ -72,6 +72,8 @@ flowchart TD
 ### 5. 报告
 
 HTML 和 JSON 报告写到 `test/reports/auto/`。HTML 会隐藏密码和验证码。JSON 保留原始值，只供本机排查，不要提交或外传。
+
+调用 Jev 或 LLM 后，终端会立刻打印本次和累计 token。数量来自接口返回的用量；接口没有返回时会标明，不会自行估算。结束时再打印合计，HTML 报告页眉也会显示。
 
 ## 自动模式
 
@@ -201,7 +203,7 @@ npx --yes auto-test-loop --mode plan --plan ./pricing.plan.json
 第一次运行会先问两个选择：
 
 1. 单步决策模型：Jev，或本地规则。选 Jev 才输入 Jev key。
-2. 规划与诊断模型：Gemini、OpenAI、DeepSeek，或本地规则。只输入所选模型的 key。
+2. 规划与诊断模型：Gemini、OpenAI、DeepSeek、Ollama，或本地规则。云端模型只输入所选模型的 key。Ollama 只需要本机地址和模型名。
 
 直接回车使用推荐项：Jev 选择元素，Gemini 建立计划和诊断失败。Gemini 默认模型是 `gemini-3.8-flash`。没有选择 OpenAI 或 DeepSeek 时，不会询问它们的 key。
 
@@ -247,7 +249,7 @@ if (report.overallStatus === "FAIL") process.exit(1);
 | 变量 | 用途 |
 | --- | --- |
 | `AUTOTESTLOOP_DECISION` | `jev` 或 `local` |
-| `AUTOTESTLOOP_ANALYSIS` | `gemini`、`openai`、`deepseek` 或 `local` |
+| `AUTOTESTLOOP_ANALYSIS` | `gemini`、`openai`、`deepseek`、`ollama` 或 `local` |
 | `TYPESAFE_API_KEY` | Jev key |
 | `TYPESAFE_MODEL` | Jev 模型，默认 `jev-latest` |
 | `JEV_MIN_CONFIDENCE` | Jev 最低置信度，默认 `0.4` |
@@ -255,6 +257,8 @@ if (report.overallStatus === "FAIL") process.exit(1);
 | `GEMINI_MODEL` | Gemini 模型，默认 `gemini-3.8-flash` |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | 仅当选择 OpenAI 时使用 |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | 仅当选择 DeepSeek 时使用 |
+| `OLLAMA_BASE_URL` | Ollama 的 OpenAI 兼容地址，默认 `http://127.0.0.1:11434/v1` |
+| `OLLAMA_MODEL` | 本机模型名，默认 `qwen2.5`。需要先 `ollama pull` |
 | `WEB_URL` | 省略 `--url` 时的地址 |
 | `TEST_EMAIL` / `TEST_USERNAME` / `TEST_PASSWORD` | 目标需要登录时的默认账号。句子里的账密会覆盖它们 |
 | `AUTOTESTLOOP_REPORT_LANG` | 报告正文语言，默认 `zh-CN`。也接受 `zh-TW`、`en`，或其他语言名称 |
@@ -282,7 +286,7 @@ pnpm run build
 
 ## 当前边界
 
-0.2.0 能完成计划、单步决策、执行、验收、一次自愈，以及自动模式下按页面继续规划。它还不是把每个页面的全部按钮都测完的全量代理。
+0.2.1 能完成计划、单步决策、执行、验收、一次自愈，以及自动模式下按页面继续规划。它还不是把每个页面的全部按钮都测完的全量代理。
 
 - 自动模式会在 URL 变化后重新感知页面并规划下一批步骤，每进入一个页面验收一次，直到目标完成或达到步数上限。
 - 自愈大多是等待后重新验收。
@@ -292,7 +296,7 @@ pnpm run build
 
 ## 发布到 npm
 
-`auto-test-loop@0.2.0` 推送到 main 后会发布。任意目录可以执行：
+`auto-test-loop@0.2.1` 推送到 main 后会发布。任意目录可以执行：
 
 ```bash
 npx auto-test-loop --goal "打开定价页，确认有免费方案" --url "https://example.com/pricing"

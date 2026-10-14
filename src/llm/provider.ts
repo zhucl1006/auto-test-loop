@@ -6,8 +6,9 @@
  * 3. MockLLMProvider (无网络依赖的确定性回退测试桩)
  */
 
-import { DEFAULT_GEMINI_MODEL, resolveAnalysis } from "../config/selection.js";
+import { DEFAULT_GEMINI_MODEL, DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL, resolveAnalysis } from "../config/selection.js";
 import { LLMProvider } from "../types/index.js";
+import { recordTokenPayload } from "./token-usage.js";
 
 export class MockLLMProvider implements LLMProvider {
   name = "MockLLMProvider";
@@ -88,6 +89,7 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const data: any = await res.json();
+    recordTokenPayload("Gemini", this.model, data);
     return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 
@@ -117,6 +119,7 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const data: any = await res.json();
+    recordTokenPayload("Gemini", this.model, data);
     const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
     return JSON.parse(rawText) as T;
   }
@@ -156,6 +159,7 @@ export class GeminiProvider implements LLMProvider {
     }
 
     const data: any = await res.json();
+    recordTokenPayload("Gemini", this.model, data);
     return data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
   }
 }
@@ -164,6 +168,7 @@ export interface OpenAILikeConfig {
   apiKey?: string;
   baseURL?: string;
   model?: string;
+  label?: string;
 }
 
 export class OpenAILikeProvider implements LLMProvider {
@@ -171,6 +176,7 @@ export class OpenAILikeProvider implements LLMProvider {
   private apiKey: string;
   private baseURL: string;
   private model: string;
+  private label: string;
 
   constructor(config: OpenAILikeConfig = {}) {
     this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || process.env.DEEPSEEK_API_KEY || "";
@@ -180,6 +186,7 @@ export class OpenAILikeProvider implements LLMProvider {
       "https://api.openai.com/v1"
     ).replace(/\/+$/, "");
     this.model = config.model || process.env.OPENAI_MODEL || "gpt-4o-mini";
+    this.label = config.label || "OpenAI";
     this.name = `OpenAILikeProvider(${this.model})`;
   }
 
@@ -216,6 +223,7 @@ export class OpenAILikeProvider implements LLMProvider {
     }
 
     const data: any = await response.json();
+    recordTokenPayload(this.label, this.model, data);
     return data.choices?.[0]?.message?.content || "";
   }
 
@@ -256,11 +264,20 @@ export function createAutoLLMProvider(): LLMProvider | undefined {
       model: process.env.OPENAI_MODEL,
     });
   }
+  if (choice === "ollama") {
+    return new OpenAILikeProvider({
+      apiKey: process.env.OLLAMA_API_KEY || "ollama",
+      baseURL: process.env.OLLAMA_BASE_URL || DEFAULT_OLLAMA_BASE_URL,
+      model: process.env.OLLAMA_MODEL || DEFAULT_OLLAMA_MODEL,
+      label: "Ollama",
+    });
+  }
   if (choice === "deepseek" && process.env.DEEPSEEK_API_KEY) {
     return new OpenAILikeProvider({
       apiKey: process.env.DEEPSEEK_API_KEY,
       baseURL: process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
       model: process.env.DEEPSEEK_MODEL || "deepseek-chat",
+      label: "DeepSeek",
     });
   }
   return undefined;

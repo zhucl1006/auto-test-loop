@@ -8,7 +8,7 @@ import os from "os"
 import path from "path"
 import readline from "readline"
 import { DEFAULT_REPORT_LANG, REPORT_LANG_KEY, resolveReportLanguage } from "./report-language.js"
-import { ANALYSIS_KEY, DECISION_KEY, DEFAULT_GEMINI_MODEL } from "./selection.js"
+import { ANALYSIS_KEY, DECISION_KEY, DEFAULT_GEMINI_MODEL, DEFAULT_OLLAMA_BASE_URL, DEFAULT_OLLAMA_MODEL } from "./selection.js"
 
 export const CONFIGURED_FLAG = "AUTOTESTLOOP_CONFIGURED"
 
@@ -26,6 +26,9 @@ export const CONFIG_KEYS = [
   "DEEPSEEK_API_KEY",
   "DEEPSEEK_MODEL",
   "DEEPSEEK_BASE_URL",
+  "OLLAMA_BASE_URL",
+  "OLLAMA_MODEL",
+  "OLLAMA_API_KEY",
   REPORT_LANG_KEY,
   "AUTO_MAX_STEPS",
 ]
@@ -39,7 +42,8 @@ const ANALYSIS_CHOICES = [
   { id: "gemini", label: "Gemini，负责规划与诊断", aliases: ["1", "gemini", "g"] },
   { id: "openai", label: "OpenAI", aliases: ["2", "openai"] },
   { id: "deepseek", label: "DeepSeek", aliases: ["3", "deepseek", "ds"] },
-  { id: "local", label: "本地规则", aliases: ["4", "local", "本地", "规则"] },
+  { id: "ollama", label: "Ollama，本地模型", aliases: ["4", "ollama", "本地模型"] },
+  { id: "local", label: "本地规则", aliases: ["5", "local", "本地", "规则"] },
 ]
 
 export function defaultConfigPath(): string {
@@ -136,6 +140,10 @@ export async function ensureUserEnv(options: {
       console.log("没有 DeepSeek Key，规划与诊断改为本地规则。")
       next[ANALYSIS_KEY] = "local"
     }
+  } else if (next[ANALYSIS_KEY] === "ollama") {
+    next.OLLAMA_BASE_URL = await askText(ask, "Ollama 接口地址", saved.OLLAMA_BASE_URL || "", DEFAULT_OLLAMA_BASE_URL)
+    next.OLLAMA_MODEL = await askText(ask, "Ollama 模型名", saved.OLLAMA_MODEL || "", DEFAULT_OLLAMA_MODEL)
+    console.log("请先在本机执行 ollama pull " + next.OLLAMA_MODEL + "。Ollama 不需要云端 key。")
   }
 
   next[REPORT_LANG_KEY] = await askReportLanguage(ask, saved[REPORT_LANG_KEY] || "")
