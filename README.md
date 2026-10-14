@@ -10,6 +10,8 @@ AutoTestLoop is an open-source loop for autonomous browser testing. It can plan 
 
 无论自动模式还是计划模式，真正打开浏览器之后都走同一条闭环。差别只在计划从哪里来。
 
+![AutoTestLoop：规划、决策、执行分层](docs/images/planning-decision-execution.webp)
+
 ```mermaid
 flowchart TD
   start[读取目标和模型配置] --> mode{计划从哪里来}
