@@ -262,15 +262,16 @@ if (report.overallStatus === "FAIL") process.exit(1);
 | `GEMINI_API_KEY` | Gemini key |
 | `GEMINI_MODEL` | Gemini 模型，默认 `gemini-3.8-flash` |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | 仅当选择 OpenAI 时使用 |
-| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | 仅当选择 DeepSeek 时使用 |
+| `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | 仅当选择 DeepSeek 时使用。地址默认 `https://api.deepseek.com/v1` |
 | `OLLAMA_BASE_URL` | Ollama 的 OpenAI 兼容地址，默认 `http://127.0.0.1:11434/v1` |
 | `OLLAMA_MODEL` | 本机模型名，默认 `qwen2.5`。需要先 `ollama pull` |
+| `OLLAMA_API_KEY` | 可选。Ollama 不校验；留空时使用 `ollama` |
 | `WEB_URL` | 省略 `--url` 时的地址 |
-| `TEST_EMAIL` / `TEST_USERNAME` / `TEST_PASSWORD` | 目标需要登录时的默认账号。句子里的账密会覆盖它们 |
+| `TEST_EMAIL` / `TEST_USERNAME` / `TEST_PASSWORD` / `TEST_PHONE` / `TEST_OTP` | 目标需要登录、但句子里没有账密时使用。句子里的值会覆盖它们 |
 | `AUTOTESTLOOP_REPORT_LANG` | 报告正文语言，默认 `zh-CN`。也接受 `zh-TW`、`en`，或其他语言名称 |
 | `AUTO_MAX_STEPS` | 自动模式步数上限，默认 `12`，最大 `200`。`config` 会询问；已保存的值覆盖项目 `.env`，`--max-steps` 只影响本次 |
 
-不要把真实 key、密码或验证码提交到仓库。
+不要把真实 key、密码或验证码提交到仓库。可复制的模板是 [.env.example](.env.example)；默认行都已注释，避免复制后盖过 `config` 保存的值。
 
 ## 不会进入 Git 的内容
 
