@@ -12,6 +12,9 @@ credentials.json
 *.pem
 *.key
 
+# product-specific regression adapters stay local; they are not part of the framework
+targets/
+
 # runtime artifacts may contain accounts, tokens, and screenshots
 test/reports/
 test/screenshots/

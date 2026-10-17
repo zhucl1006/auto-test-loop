@@ -280,6 +280,7 @@ if (report.overallStatus === "FAIL") process.exit(1);
 - `.env` 和 `~/.config/auto-test-loop/env`
 - `node_modules/` 和 `dist/`
 - `test/reports/`、`test/screenshots/`
+- `targets/`：具体项目的回归接入，不属于框架
 - 编辑器目录和本地认证状态
 
 ## 本地开发

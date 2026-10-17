@@ -39,10 +39,6 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "auto": "node dist/cli.js",
-    "aireach": "node targets/aireach/run-regression.mjs",
-    "aireach:ui": "node targets/aireach/run-suite.mjs",
-    "aireach:api": "node targets/aireach/api-functional.mjs",
-    "aireach:load": "node targets/aireach/load-regression.mjs",
     "prepare": "tsc"
   },
   "dependencies": {
